@@ -69,26 +69,16 @@ pip install jhansi
 
 ```python
 from jhansi import Sandbox
-
-with Sandbox(language="python") as sb:
-    result = sb.exec("print('hello from isolation')")
-    print(result.output)
+    
+    with Sandbox(language="python") as sb:
+        sb.upload_file("main.py")
+        result = sb.exec("python main.py")
+        print(result["output"])
 ```
 
 > SDK is under active development. Follow this repo for releases.
 
----
-
-## Petri API
-
-```
-POST   /v1/sandboxes            → Create sandbox, get sb_<id>
-POST   /v1/sandboxes/{id}/exec  → Run code, get output
-GET    /v1/sandboxes/{id}       → Check status
-DELETE /v1/sandboxes/{id}       → Destroy it. Gone.
-```
-
-Multi-language: `python` · `node` · `go`
+Multi-language: `python` · `node` · `go`, `java`
 
 ---
 
