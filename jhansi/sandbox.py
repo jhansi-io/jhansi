@@ -14,7 +14,7 @@ class Sandbox:
             "JHANSI_BASE_URL", "http://localhost:8000"
         )
         self._id: str | None = None
-        self._client = httpx.Client(base_url=self.base_url)
+        self._client = httpx.Client(base_url=self.base_url, timeout=300.0)
 
     def create(self) -> "Sandbox":
         response = self._client.post(
