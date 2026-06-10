@@ -2,7 +2,7 @@ import os
 import httpx
 from fastmcp import FastMCP
 
-BASE_URL = os.environ.get("JHANSI_BASE_URL", "http://loclhost:8000")
+BASE_URL = os.environ.get("JHANSI_BASE_URL", "http://localhost:8000")
 
 mcp = FastMCP("jhansi")
 
