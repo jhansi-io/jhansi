@@ -7,9 +7,13 @@ BASE_URL = os.environ.get("JHANSI_BASE_URL", "http://loclhost:8000")
 mcp = FastMCP("jhansi")
 
 @mcp.tool()
-def create_sandbox() -> str:
+def create_sandbox(language: str = "python") -> str:
     """Create a new isolated sandbox. Returns the sandbox ID."""
-    response = httpx.post(f"{BASE_URL}/v1/sandboxes")
+    response = httpx.post(
+        f"{BASE_URL}/v1/sandboxes",
+        json={"language": language},
+    )
+    
     response.raise_for_status()
     data: dict[str, str] = response.json()
     return data["id"]

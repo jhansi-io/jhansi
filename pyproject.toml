@@ -1,6 +1,6 @@
 [project]
 name = "jhansi"
-version = "0.1.4"
+version = "0.1.5"
 description = "Python SDK for jhansi.io - run AI-generated code in isolated sandboxes"
 authors = [{name = "Arun Raghunath"}]
 license = {text = "Apache-2.0"}
@@ -13,7 +13,7 @@ dependencies = [
 
 [tool.poetry]
 name = "jhansi"
-version = "0.1.4"
+version = "0.1.5"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
