@@ -38,15 +38,21 @@ class Sandbox:
     def __exit__(self, *args: object) -> None:
         self.delete()
 
-    def exec(self, command: str, test: bool = False) -> dict[str, object]:
+
+    def exec(self, command: str, test: bool = False) -> str:
         if self._id is None:
             raise RuntimeError("Sandbox not created yet")
-        response = self._client.post(
+        output = ""
+        with self._client.stream(
+            "POST",
             f"/v1/sandboxes/{self._id}/exec",
             json={"command": command, "test": test},
-        )
-        response.raise_for_status()
-        return response.json()  # type: ignore[no-any-return]
+        ) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if line.startswith("data: "):
+                    output += line[len("data: ") :] + "\n"
+        return output
 
     def upload_file(self, path: str) -> None:
         if self._id is None:
@@ -72,4 +78,4 @@ class Sandbox:
         response = self._client.get(f"/v1/sandboxes/{self._id}")
         response.raise_for_status()
 
-        return response.json()  # type: ignore[no-any-return]
+        return response.json() # type: ignore[no-any-return]
