@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4] - 2026-06-10
+### Added
+- MCP server (`jhansi/mcp_server.py`) for AI coding agents (Claude Code, Cursor, Windsurf)
+- Exposes three tools: `create_sandbox`, `exec_code`, `delete_sandbox`
+- Run with `python -m jhansi.mcp_server`
+- Configurable via `JHANSI_BASE_URL` env var
+
 ## [0.1.3] - 2026-06-10
 
 ### Changed
