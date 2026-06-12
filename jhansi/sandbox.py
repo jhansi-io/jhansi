@@ -38,7 +38,6 @@ class Sandbox:
     def __exit__(self, *args: object) -> None:
         self.delete()
 
-
     def exec(self, command: str, test: bool = False) -> str:
         if self._id is None:
             raise RuntimeError("Sandbox not created yet")
@@ -78,4 +77,4 @@ class Sandbox:
         response = self._client.get(f"/v1/sandboxes/{self._id}")
         response.raise_for_status()
 
-        return response.json() # type: ignore[no-any-return]
+        return response.json()  # type: ignore[no-any-return]
