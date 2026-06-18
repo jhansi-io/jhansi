@@ -16,10 +16,19 @@ class Sandbox:
         self._id: str | None = None
         self._client = httpx.Client(base_url=self.base_url, timeout=300.0)
 
-    def create(self) -> "Sandbox":
+    def create(
+        self,
+        agent: str | None = None,
+        created_by: str | None = None,
+    ) -> "Sandbox":
+        payload: dict[str, object] = {"language": self.language}
+        if agent:
+            payload["agent"] = agent
+        if created_by:
+            payload["created_by"] = created_by
         response = self._client.post(
             "/v1/sandboxes",
-            json={"language": self.language},
+            json=payload,
         )
         response.raise_for_status()
         self._id = response.json()["id"]
@@ -50,7 +59,12 @@ class Sandbox:
             response.raise_for_status()
             for line in response.iter_lines():
                 if line.startswith("data: "):
-                    output += line[len("data: ") :] + "\n"
+                    data = line[len("data: ") :]
+                    if '"type": "output"' in data:
+                        import json
+
+                        parsed = json.loads(data)
+                        output += parsed.get("data", "") + "\n"
         return output
 
     def upload_file(self, path: str) -> None:

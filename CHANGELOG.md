@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.7] - 2026-06-18
+### Added
+- CLI commands: `jhansi watch`, `jhansi exec`, `jhansi unwatch`
+- `jhansi watch <dir>` — creates sandbox, uploads project files, writes sandbox ID to `.jhansi`
+- `jhansi exec <command>` — resyncs files if changed, runs command against active sandbox
+- `jhansi unwatch` — tears down sandbox, deletes `.jhansi`
+- Smart sync — hashes directory contents, only uploads if files have changed
+- Silent sandbox recovery — if sandbox expired, recreates and resyncs automatically
+- `agent` and `created_by` fields on `Sandbox.create()`
+- `typer` dependency for CLI
+
 ## [0.1.4] - 2026-06-10
 ### Added
 - MCP server (`jhansi/mcp_server.py`) for AI coding agents (Claude Code, Cursor, Windsurf)

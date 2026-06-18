@@ -1,6 +1,6 @@
 [project]
 name = "jhansi"
-version = "0.1.6"
+version = "0.1.7"
 description = "Python SDK for jhansi.io - run AI-generated code in isolated sandboxes"
 authors = [{name = "Arun Raghunath"}]
 license = {text = "Apache-2.0"}
@@ -8,15 +8,19 @@ readme = "README.md"
 requires-python = ">=3.12,<4.0"
 dependencies = [
     "httpx>=0.28.1,<0.29.0",
-    "fastmcp>=2.0.0,<3.0.0"
+    "fastmcp>=2.0.0,<3.0.0",
+    "typer (>=0.26.7,<0.27.0)"
 ]
 
 [tool.poetry]
 name = "jhansi"
-version = "0.1.6"
+version = "0.1.7"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
+
+[tool.poetry.scripts]
+jhansi = "jhansi.cli:app"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -42,3 +46,4 @@ python_version = "3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
