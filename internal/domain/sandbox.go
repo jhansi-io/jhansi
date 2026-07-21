@@ -42,3 +42,13 @@ func (s *Sandbox) MarkReady() error {
 	s.Status = SandboxReady
 	return nil
 }
+
+// MarkActive moves the sandbox to ACTIVE. Legal only from READY —
+// a run is starting. Enforces one live run per sandbox.
+func (s *Sandbox) MarkActive() error {
+	if s.Status != SandboxReady {
+		return fmt.Errorf("sandbox %s: cannot mark active from %s", s.ID, s.Status)
+	}
+	s.Status = SandboxActive
+	return nil
+}
