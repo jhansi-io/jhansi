@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 //SandboxStatus is the lifecycle state of a sandbox.
 
@@ -28,4 +31,14 @@ func NewSandbox(id string) *Sandbox {
 		Status: SandboxCreating,
 		CreatedAt: time.Now().UTC(),
 	}
+}
+
+// MarkReady moves the sandbox to READY. Legal from CREATING (came up)
+// or ACTIVE (a run finished).
+func (s *Sandbox) MarkReady() error {
+	if s.Status != SandboxCreating && s.Status != SandboxActive {
+		return fmt.Errorf("sandbox %s: cannot mark ready from %s", s.ID, s.Status)
+	}
+	s.Status = SandboxReady
+	return nil
 }

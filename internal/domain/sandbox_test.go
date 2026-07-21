@@ -13,3 +13,35 @@ func TestNewSandbox(t *testing.T) {
 		t.Errorf("Status = %q, want %q", s.Status, SandboxCreating)
 	}
 }
+
+func TestMarkReady(t *testing.T) {
+	tests := []struct {
+		name	string
+		from	SandboxStatus
+		wantErr	bool
+	}{
+		{"from creating", SandboxCreating, false},
+		{"from active", SandboxActive, false},
+		{"from deleted", SandboxDeleted, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Sandbox{ID: "sb_1", Status: tt.from}
+			err := s.MarkReady()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("MarkReady from %s: want error, got nil", tt.from)
+				}
+				return 
+			}
+			if err != nil {
+				t.Errorf("MarkReady from %s: unexpected error %v", tt.from, err)
+			}
+			if s.Status != SandboxReady {
+				t.Errorf("Sttaus = %s, wan READY", s.Status)
+			}
+		})
+	}
+}
