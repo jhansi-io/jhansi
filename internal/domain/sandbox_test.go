@@ -76,3 +76,41 @@ func TestMarkActive(t *testing.T) {
 		})
 	}
 }
+
+func TestSandboxTerminals(t *testing.T) {
+	tests := []struct {
+		name    string
+		from    SandboxStatus
+		mark    func(*Sandbox) error
+		want    SandboxStatus
+		wantErr bool
+	}{
+		{"delete from ready", SandboxReady, (*Sandbox).MarkDeleted, SandboxDeleted, false},
+		{"delete from active", SandboxActive, (*Sandbox).MarkDeleted, "", true},
+		{"expire from ready", SandboxReady, (*Sandbox).MarkExpired, SandboxExpired, false},
+		{"expire from creating", SandboxCreating, (*Sandbox).MarkExpired, "", true},
+		{"error from creating", SandboxCreating, (*Sandbox).MarkError, SandboxError, false},
+		{"error from active", SandboxActive, (*Sandbox).MarkError, SandboxError, false},
+		{"error from deleted", SandboxDeleted, (*Sandbox).MarkError, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Sandbox{ID: "sb-1", Status: tt.from}
+			err := tt.mark(s)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("want error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error %v", err)
+			}
+			if s.Status != tt.want {
+				t.Errorf("Status = %s, want %s", s.Status, tt.want)
+			}
+		})
+	}
+}

@@ -52,3 +52,35 @@ func (s *Sandbox) MarkActive() error {
 	s.Status = SandboxActive
 	return nil
 }
+
+// MarkDeleted moves the sandbox to DELETED (explicit destroy).
+// Legal only from READY — an active run resolves to READY first.
+func (s *Sandbox) MarkDeleted() error {
+	if s.Status != SandboxReady {
+		return fmt.Errorf("sandbox %s: cannot mark deleted from %s", s.ID, s.Status)
+	}
+	s.Status = SandboxDeleted
+	return nil
+}
+
+// MarkExpired moves the sandbox to EXPIRED (TTL ended it).
+// Legal only from READY.
+func (s *Sandbox) MarkExpired() error {
+	if s.Status != SandboxReady {
+		return fmt.Errorf("sandbox %s: cannot expire from %s", s.ID, s.Status)
+	}
+	s.Status = SandboxExpired
+	return nil
+}
+
+// MarkError moves the sandbox to ERROR (infrastructure fault).
+// Legal only from any live state: CREATING, READY, or ACTIVE.
+func (s *Sandbox) MarkError() error {
+	switch s.Status {
+	case SandboxCreating, SandboxReady, SandboxActive:
+		s.Status = SandboxError
+		return nil
+	default:
+		return fmt.Errorf("sandbox %s: cannot error from %s", s.ID, s.Status)
+	}
+}
