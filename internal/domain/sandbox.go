@@ -20,3 +20,12 @@ type Sandbox struct {
 	Status		SandboxStatus
 	CreatedAt	time.Time
 }
+
+// NewSandbox mints a new sandbox in the CREATING state.
+func NewSandbox(id string) *Sandbox {
+	return &Sandbox{
+		ID: id,
+		Status: SandboxCreating,
+		CreatedAt: time.Now().UTC(),
+	}
+}
