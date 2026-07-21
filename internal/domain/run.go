@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 //RunStatus is the lifecycle state of a single execution.
 type RunStatus string
 
@@ -12,3 +14,10 @@ const (
 	RunTimedOut		RunStatus = "TIMED_OUT"
 	RunCancelled	RunStatus = "CANCELLED"
 )
+
+type Run struct {
+	ID			string
+	SandboxID	string
+	Status		RunStatus
+	CreatedAt	time.Time
+}
