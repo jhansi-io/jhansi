@@ -22,7 +22,7 @@ type Sandbox struct {
 	ID			string
 	Status		SandboxStatus
 	CreatedAt	time.Time
-	events		[]Event
+	eventBuffer
 }
 
 // NewSandbox mints a new sandbox in the CREATING state.
@@ -31,12 +31,9 @@ func NewSandbox(id string) *Sandbox {
 		ID: id,
 		Status: SandboxCreating,
 		CreatedAt: time.Now().UTC(),
+		eventBuffer: eventBuffer{aggregateID: id},
 	}
-	s.events = append(s.events, Event{
-		Name:			"sandbox.created",
-		At:				s.CreatedAt,
-		AggregateID:	s.ID, 		
-	})
+	s.record("sandbox.created", s.CreatedAt)
 	return s
 }
 
@@ -47,11 +44,7 @@ func (s *Sandbox) MarkReady() error {
 		return fmt.Errorf("sandbox %s: cannot mark ready from %s", s.ID, s.Status)
 	}
 	s.Status = SandboxReady
-	s.events = append(s.events, Event{
-		Name:			"sandbox.ready",
-		At:				time.Now().UTC(),
-		AggregateID:	s.ID,
-	})
+	s.record("sandbox.ready", time.Now().UTC())
 	return nil
 }
 
@@ -62,11 +55,7 @@ func (s *Sandbox) MarkActive() error {
 		return fmt.Errorf("sandbox %s: cannot mark active from %s", s.ID, s.Status)
 	}
 	s.Status = SandboxActive
-	s.events = append(s.events, Event{
-		Name:			"sandbox.active",
-		At:				time.Now().UTC(),
-		AggregateID:	s.ID,
-	})
+	s.record("sandbox.active", time.Now().UTC())
 	return nil
 }
 
@@ -77,11 +66,7 @@ func (s *Sandbox) MarkDeleted() error {
 		return fmt.Errorf("sandbox %s: cannot mark deleted from %s", s.ID, s.Status)
 	}
 	s.Status = SandboxDeleted
-	s.events = append(s.events, Event{
-		Name:			"sandbox.deleted",
-		At:				time.Now().UTC(),
-		AggregateID:	s.ID,
-	})
+	s.record("sandbox.deleted", time.Now().UTC())
 	return nil
 }
 
@@ -92,11 +77,7 @@ func (s *Sandbox) MarkExpired() error {
 		return fmt.Errorf("sandbox %s: cannot expire from %s", s.ID, s.Status)
 	}
 	s.Status = SandboxExpired
-	s.events = append(s.events, Event{
-		Name:			"sandbox.expired",
-		At:				time.Now().UTC(),
-		AggregateID:	s.ID,
-	})
+	s.record("sandbox.expired", time.Now().UTC())
 	return nil
 }
 
@@ -106,20 +87,9 @@ func (s *Sandbox) MarkError() error {
 	switch s.Status {
 	case SandboxCreating, SandboxReady, SandboxActive:
 		s.Status = SandboxError
-		s.events = append(s.events, Event{
-			Name:			"sandbox.error",
-			At:				time.Now().UTC(),
-			AggregateID:	s.ID,
-		})
+		s.record("sandbox.error", time.Now().UTC())
 		return nil
 	default:
 		return fmt.Errorf("sandbox %s: cannot error from %s", s.ID, s.Status)
 	}
-}
-
-// DrainEvents returns the buffered events and clears the buffer.
-func (s *Sandbox) DrainEvents() []Event {
-	events := s.events
-	s.events = nil
-	return events
 }

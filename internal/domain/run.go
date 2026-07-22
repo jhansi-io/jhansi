@@ -23,21 +23,18 @@ type Run struct {
 	SandboxID	string
 	Status		RunStatus
 	CreatedAt	time.Time
-	events		[]Event
+	eventBuffer
 }
 
 func NewRun(id, sandboxID string) *Run {
 	r := &Run{
-		ID:			id,
-		SandboxID:	sandboxID,
-		Status:		RunQueued,
-		CreatedAt:	time.Now().UTC(),
+		ID:				id,
+		SandboxID:		sandboxID,
+		Status:			RunQueued,
+		CreatedAt:		time.Now().UTC(),
+		eventBuffer:	eventBuffer{aggregateID: id}, 
 	}
-	r.events = append(r.events, Event{
-		Name:		"run.created",
-		At:			r.CreatedAt,
-		AggregateID:r.ID,
-	})
+	r.record("run.created", r.CreatedAt)
 	return r
 }
 
@@ -47,11 +44,7 @@ func (r *Run) MarkPreparing() error {
 		return fmt.Errorf("run %s: cannot mark preparing from %s", r.ID, r.Status)
 	}
 	r.Status = RunPreparing
-	r.events = append(r.events, Event{
-		Name:			"run.preparing",
-		At:				time.Now().UTC(),
-		AggregateID:	r.ID,
-	})
+	r.record("run.preparing", time.Now().UTC())
 	return nil
 }
 
@@ -61,11 +54,7 @@ func (r *Run) MarkRunning() error {
 		return fmt.Errorf("run %s: cannot mark running from %s", r.ID, r.Status)
 	}
 	r.Status = RunRunning
-	r.events = append(r.events, Event{
-		Name:			"run.running",
-		At:				time.Now().UTC(),
-		AggregateID:	r.ID,
-	})
+	r.record("run.running", time.Now().UTC())
 	return nil
 }
 
@@ -75,11 +64,7 @@ func (r *Run) MarkSucceeded() error {
 		return fmt.Errorf("run %s: cannot mark succeeded from %s", r.ID, r.Status)
 	}
 	r.Status = RunSucceeded
-	r.events = append(r.events, Event{
-		Name:			"run.succeeded",
-		At:				time.Now().UTC(),
-		AggregateID:	r.ID,
-	})
+	r.record("run.succeeded", time.Now().UTC())
 	return nil
 }
 
@@ -89,11 +74,7 @@ func (r *Run) MarkFailed() error {
 		return fmt.Errorf("run %s: cannot mark failed from %s", r.ID, r.Status)
 	}
 	r.Status = RunFailed
-	r.events = append(r.events, Event{
-		Name:			"run.failed",
-		At:				time.Now().UTC(),
-		AggregateID:	r.ID,
-	})
+	r.record("run.failed", time.Now().UTC())
 	return nil
 }
 
@@ -103,11 +84,7 @@ func (r *Run) MarkTimedOut() error {
 		return fmt.Errorf("run %s: cannot mark timed_out from %s", r.ID, r.Status)
 	}
 	r.Status = RunTimedOut
-	r.events = append(r.events, Event{
-		Name:			"run.timed_out",
-		At:				time.Now().UTC(),
-		AggregateID:	r.ID,
-	})
+	r.record("run.timed_out", time.Now().UTC())
 	return nil
 }
 
@@ -117,20 +94,9 @@ func (r *Run) MarkCancelled() error {
 	switch r.Status {
 	case RunQueued, RunPreparing, RunRunning:
 		r.Status = RunCancelled
-		r.events = append(r.events, Event{
-			Name:			"run.cancelled",
-			At:				time.Now().UTC(),
-			AggregateID:	r.ID,
-		})
+		r.record("run.cancelled", time.Now().UTC())
 		return nil
 	default:
 		return fmt.Errorf("run %s: cannot mark cancelled from %s", r.ID, r.Status)
 	}
-}
-
-//DrainEvents returns the buffered events and clears the buffer.
-func (r *Run) DrainEvents() []Event {
-	events := r.events
-	r.events = nil
-	return events
 }
