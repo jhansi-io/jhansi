@@ -4,6 +4,9 @@ import "testing"
 
 func TestNewSandbox(t *testing.T) {
 	s := NewSandbox("sb_1")
+	if got := s.Drainevents(); len(got) != 1 || got[0].Name != "sandbox.created" {
+		t.Fatalf("expected sandbox.created, got %v", got)
+	}
 
 	if s.ID != "sb_1" {
 		t.Errorf("ID = %q, want %q", s.ID, "sb_1")
@@ -79,19 +82,20 @@ func TestMarkActive(t *testing.T) {
 
 func TestSandboxTerminals(t *testing.T) {
 	tests := []struct {
-		name    string
-		from    SandboxStatus
-		mark    func(*Sandbox) error
-		want    SandboxStatus
-		wantErr bool
+		name    	string
+		from    	SandboxStatus
+		mark    	func(*Sandbox) error
+		want    	SandboxStatus
+		wantEvent	string
+		wantErr 	bool
 	}{
-		{"delete from ready", SandboxReady, (*Sandbox).MarkDeleted, SandboxDeleted, false},
-		{"delete from active", SandboxActive, (*Sandbox).MarkDeleted, "", true},
-		{"expire from ready", SandboxReady, (*Sandbox).MarkExpired, SandboxExpired, false},
-		{"expire from creating", SandboxCreating, (*Sandbox).MarkExpired, "", true},
-		{"error from creating", SandboxCreating, (*Sandbox).MarkError, SandboxError, false},
-		{"error from active", SandboxActive, (*Sandbox).MarkError, SandboxError, false},
-		{"error from deleted", SandboxDeleted, (*Sandbox).MarkError, "", true},
+		{"delete from ready", SandboxReady, (*Sandbox).MarkDeleted, SandboxDeleted, "sandbox.deleted", false},
+		{"delete from active", SandboxActive, (*Sandbox).MarkDeleted, "", "", true},
+		{"expire from ready", SandboxReady, (*Sandbox).MarkExpired, SandboxExpired, "sandbox.expired", false},
+		{"expire from creating", SandboxCreating, (*Sandbox).MarkExpired, "", "", true},
+		{"error from creating", SandboxCreating, (*Sandbox).MarkError, SandboxError, "sandbox.error", false},
+		{"error from active", SandboxActive, (*Sandbox).MarkError, SandboxError, "sandbox.error", false},
+		{"error from deleted", SandboxDeleted, (*Sandbox).MarkError, "", "", true},
 	}
 
 	for _, tt := range tests {
@@ -103,6 +107,9 @@ func TestSandboxTerminals(t *testing.T) {
 				if err == nil {
 					t.Errorf("want error, got nil")
 				}
+				if events := s.Drainevents(); len(events) != 0 {
+					t.Errorf("rejected transition emitted %v, want none", events)
+				}
 				return
 			}
 			if err != nil {
@@ -111,6 +118,30 @@ func TestSandboxTerminals(t *testing.T) {
 			if s.Status != tt.want {
 				t.Errorf("Status = %s, want %s", s.Status, tt.want)
 			}
+			events := s.Drainevents()
+			if len(events) != 1 || events[0].Name != tt.wantEvent {
+				t.Errorf("events = %v, want one %s", events, tt.wantEvent)
+			}
 		})
+	}
+}
+
+func TestSandboxEventSequence(t *testing.T) {
+	s := NewSandbox("sb_1")
+	if err := s.MarkReady(); err != nil {
+		t.Fatalf("MarkReady: %v", err)
+	}
+	if err := s.MarkActive(); err != nil {
+		t.Fatalf("MarkActive: %v", err)
+	}
+	events := s.Drainevents()
+	want := []string{"sandbox.created", "sandbox.ready", "sandbox.active"}
+	if len(events) != len(want) {
+		t.Fatalf("got %d events, want %d: %v", len(events), len(want), events)
+	}
+	for i, name := range want {
+		if events[i].Name != name {
+			t.Errorf("events[%d].Name = %q, want %q", i, events[i].Name, name)
+		}
 	}
 }
