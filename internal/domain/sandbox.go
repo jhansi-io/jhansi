@@ -118,7 +118,7 @@ func (s *Sandbox) MarkError() error {
 }
 
 // DrainEvents returns the buffered events and clears the buffer.
-func (s *Sandbox) Drainevents() []Event {
+func (s *Sandbox) DrainEvents() []Event {
 	events := s.events
 	s.events = nil
 	return events

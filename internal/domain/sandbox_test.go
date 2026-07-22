@@ -4,7 +4,7 @@ import "testing"
 
 func TestNewSandbox(t *testing.T) {
 	s := NewSandbox("sb_1")
-	if got := s.Drainevents(); len(got) != 1 || got[0].Name != "sandbox.created" {
+	if got := s.DrainEvents(); len(got) != 1 || got[0].Name != "sandbox.created" {
 		t.Fatalf("expected sandbox.created, got %v", got)
 	}
 
@@ -107,7 +107,7 @@ func TestSandboxTerminals(t *testing.T) {
 				if err == nil {
 					t.Errorf("want error, got nil")
 				}
-				if events := s.Drainevents(); len(events) != 0 {
+				if events := s.DrainEvents(); len(events) != 0 {
 					t.Errorf("rejected transition emitted %v, want none", events)
 				}
 				return
@@ -118,7 +118,7 @@ func TestSandboxTerminals(t *testing.T) {
 			if s.Status != tt.want {
 				t.Errorf("Status = %s, want %s", s.Status, tt.want)
 			}
-			events := s.Drainevents()
+			events := s.DrainEvents()
 			if len(events) != 1 || events[0].Name != tt.wantEvent {
 				t.Errorf("events = %v, want one %s", events, tt.wantEvent)
 			}
@@ -134,7 +134,7 @@ func TestSandboxEventSequence(t *testing.T) {
 	if err := s.MarkActive(); err != nil {
 		t.Fatalf("MarkActive: %v", err)
 	}
-	events := s.Drainevents()
+	events := s.DrainEvents()
 	want := []string{"sandbox.created", "sandbox.ready", "sandbox.active"}
 	if len(events) != len(want) {
 		t.Fatalf("got %d events, want %d: %v", len(events), len(want), events)
