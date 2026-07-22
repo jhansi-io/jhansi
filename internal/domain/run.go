@@ -5,34 +5,34 @@ import (
 	"time"
 )
 
-//RunStatus is the lifecycle state of a single execution.
+// RunStatus is the lifecycle state of a single execution.
 type RunStatus string
 
 const (
-	RunQueued		RunStatus = "QUEUED"
-	RunPreparing	RunStatus = "PREPARING"
-	RunRunning		RunStatus = "RUNNING"
-	RunSucceeded	RunStatus = "SUCCEEDED"
-	RunFailed		RunStatus = "FAILED"
-	RunTimedOut		RunStatus = "TIMED_OUT"
-	RunCancelled	RunStatus = "CANCELLED"
+	RunQueued    RunStatus = "QUEUED"
+	RunPreparing RunStatus = "PREPARING"
+	RunRunning   RunStatus = "RUNNING"
+	RunSucceeded RunStatus = "SUCCEEDED"
+	RunFailed    RunStatus = "FAILED"
+	RunTimedOut  RunStatus = "TIMED_OUT"
+	RunCancelled RunStatus = "CANCELLED"
 )
 
 type Run struct {
-	ID			string
-	SandboxID	string
-	Status		RunStatus
-	CreatedAt	time.Time
+	ID        string
+	SandboxID string
+	Status    RunStatus
+	CreatedAt time.Time
 	eventBuffer
 }
 
 func NewRun(id, sandboxID string) *Run {
 	r := &Run{
-		ID:				id,
-		SandboxID:		sandboxID,
-		Status:			RunQueued,
-		CreatedAt:		time.Now().UTC(),
-		eventBuffer:	eventBuffer{aggregateID: id}, 
+		ID:          id,
+		SandboxID:   sandboxID,
+		Status:      RunQueued,
+		CreatedAt:   time.Now().UTC(),
+		eventBuffer: eventBuffer{aggregateID: id},
 	}
 	r.record("run.created", r.CreatedAt)
 	return r
@@ -48,7 +48,7 @@ func (r *Run) MarkPreparing() error {
 	return nil
 }
 
-//MarkRunning moves the run to Running. Legal only from PREPARING.
+// MarkRunning moves the run to Running. Legal only from PREPARING.
 func (r *Run) MarkRunning() error {
 	if r.Status != RunPreparing {
 		return fmt.Errorf("run %s: cannot mark running from %s", r.ID, r.Status)

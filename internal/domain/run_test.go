@@ -46,12 +46,12 @@ func TestMarkSucceeded(t *testing.T) {
 	if err := r.MarkPreparing(); err != nil {
 		t.Fatalf("setup MarkPreparing: %v", err)
 	}
-	
+
 	if err := r.MarkRunning(); err != nil {
 		t.Fatalf("setup MarkRunning: %v", err)
 	}
 	r.DrainEvents() // clear setup events
-	
+
 	if err := r.MarkSucceeded(); err != nil {
 		t.Fatalf("MarkSucceeded: unexpected error %v", err)
 	}
@@ -75,7 +75,7 @@ func TestMarkSucceeded(t *testing.T) {
 }
 
 func TestMarkFailed(t *testing.T) {
-	// RUNNING → FAILED 
+	// RUNNING → FAILED
 	r := NewRun("run_1", "sb_1")
 	if err := r.MarkPreparing(); err != nil {
 		t.Fatalf("setup MarkPreparing: %v", err)
@@ -106,7 +106,7 @@ func TestMarkFailed(t *testing.T) {
 }
 
 func TestMarkTimedOut(t *testing.T) {
-	// RUNNING → TIMED_OUT 
+	// RUNNING → TIMED_OUT
 	r := NewRun("run_1", "sb_1")
 	if err := r.MarkPreparing(); err != nil {
 		t.Fatalf("setup MarkPreparing: %v", err)
@@ -115,7 +115,7 @@ func TestMarkTimedOut(t *testing.T) {
 		t.Fatalf("setup MarkRunning: %v", err)
 	}
 	r.DrainEvents() //clear setup events
-	
+
 	if err := r.MarkTimedOut(); err != nil {
 		t.Fatalf("MarkTimedOut: unexpected error: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestMarkTimedOut(t *testing.T) {
 	// reject: from QUEUED, emits nothing
 	q := NewRun("run_2", "sb_1")
 	q.DrainEvents() // clear run.created
-	if err := q.MarkTimedOut; err == nil {
+	if err := q.MarkTimedOut(); err == nil {
 		t.Errorf("MarkTimedOut from QUEUED: want error, got nil")
 	}
 	if got := q.DrainEvents(); len(got) != 0 {
@@ -142,8 +142,8 @@ func TestMarkTimedOut(t *testing.T) {
 func TestMarkCancelled(t *testing.T) {
 	// permissive: legal from QUEUED, PREPARING, RUNNING
 	froms := []struct {
-		name	string
-		to		func(*Run) // drive a fresh run to the from-state
+		name string
+		to   func(*Run) // drive a fresh run to the from-state
 	}{
 		{"from queued", func(r *Run) {}},
 		{"from preparing", func(r *Run) { r.MarkPreparing() }},

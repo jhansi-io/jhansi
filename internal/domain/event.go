@@ -6,7 +6,7 @@ import "time"
 // The envelope is minimal by ADR-002; payload and a typed name
 // taxonomy are deferred to the event-model ADR.
 type Event struct {
-	Name 		string
-	At			time.Time
-	AggregateID	string
+	Name        string
+	At          time.Time
+	AggregateID string
 }

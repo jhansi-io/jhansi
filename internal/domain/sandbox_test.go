@@ -19,9 +19,9 @@ func TestNewSandbox(t *testing.T) {
 
 func TestMarkReady(t *testing.T) {
 	tests := []struct {
-		name	string
-		from	SandboxStatus
-		wantErr	bool
+		name    string
+		from    SandboxStatus
+		wantErr bool
 	}{
 		{"from creating", SandboxCreating, false},
 		{"from active", SandboxActive, false},
@@ -37,7 +37,7 @@ func TestMarkReady(t *testing.T) {
 				if err == nil {
 					t.Errorf("MarkReady from %s: want error, got nil", tt.from)
 				}
-				return 
+				return
 			}
 			if err != nil {
 				t.Errorf("MarkReady from %s: unexpected error %v", tt.from, err)
@@ -51,9 +51,9 @@ func TestMarkReady(t *testing.T) {
 
 func TestMarkActive(t *testing.T) {
 	tests := []struct {
-		name	string
-		from 	SandboxStatus
-		wantErr	bool	
+		name    string
+		from    SandboxStatus
+		wantErr bool
 	}{
 		{"from ready", SandboxReady, false},
 		{"from active", SandboxActive, true},
@@ -82,12 +82,12 @@ func TestMarkActive(t *testing.T) {
 
 func TestSandboxTerminals(t *testing.T) {
 	tests := []struct {
-		name    	string
-		from    	SandboxStatus
-		mark    	func(*Sandbox) error
-		want    	SandboxStatus
-		wantEvent	string
-		wantErr 	bool
+		name      string
+		from      SandboxStatus
+		mark      func(*Sandbox) error
+		want      SandboxStatus
+		wantEvent string
+		wantErr   bool
 	}{
 		{"delete from ready", SandboxReady, (*Sandbox).MarkDeleted, SandboxDeleted, "sandbox.deleted", false},
 		{"delete from active", SandboxActive, (*Sandbox).MarkDeleted, "", "", true},
