@@ -1,4 +1,4 @@
-# ADR-001: Domain model - Sandbox and Run as seperate aggregates
+# ADR-001: Domain model - Sandbox and Run as separate aggregates
 
 Status: Accepted
 Date: 2026-07-21
@@ -16,7 +16,7 @@ shapes and their failures mean different things.
 
 ## Decision
 
-Sandbox and Run are **seperate aggregates**, each with its own state
+Sandbox and Run are **separate aggregates**, each with its own state
 machine. A Run's terminal state never propagates to its Sandbox.
 
 **Sandbox lifecycle:**
@@ -30,7 +30,7 @@ machine. A Run's terminal state never propagates to its Sandbox.
 - ACTIVE: a run is executing. Enforces one live run per sandbox, serial.
 - READY ⇄ ACTIVE cycles for each run.
 - EXPIRED: TTL ended it. DELETED: explicit destroy. ERROR: infrastructure
-  fault (container died, runtime available).
+  fault (container died, runtime unavailable).
 
 **Run lifecycle:**
 
