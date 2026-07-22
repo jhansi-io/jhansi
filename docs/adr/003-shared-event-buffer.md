@@ -11,7 +11,7 @@ exist and carry an identical `events []Event` field and drain method,
 and every transition repeats the full `Event{Name, At, AggregateID}`
 literal — roughly thirteen sites across Sandbox and Run. The shape is
 proven (two real copies, not a guess), and nothing downstream depends
-on i tyet. This is the cheapest moment to extract the shared primitive:
+on it yet. This is the cheapest moment to extract the shared primitive:
 once the registry and routes call DrainEvents, the blast radius grows.
 
 ## Decision
@@ -31,14 +31,14 @@ is exactly the intended public API. A transition becomes one line:
 `s.record("sandbox.ready", time.Now().UTC())`.
 
 `at` stays a parameter, not stamped inside `record`. This preserves the
-New() case where the event time equals CreatedAt, and keps the parked
+New() case where the event time equals CreatedAt, and keeps the parked
 clock-injection decision open — it is not made here.
 
 ## Consequences
 
 - Each of the ~13 emission sites collapses to a single `record` call;
   the wrong-AggregateID / wrong-name copy-paste class of bug is removed.
-- Public API is unchanged — existing tests stay gren. The refactor is
+- Public API is unchanged — existing tests stay green. The refactor is
   behaviour-preserving and lands as its own commit.
 - `record` centralises where time is stamped at the call boundary, so
   when clock injection earns its ADR, there is one seam to change.

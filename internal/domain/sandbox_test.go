@@ -43,7 +43,7 @@ func TestMarkReady(t *testing.T) {
 				t.Errorf("MarkReady from %s: unexpected error %v", tt.from, err)
 			}
 			if s.Status != SandboxReady {
-				t.Errorf("Sttaus = %s, wan READY", s.Status)
+				t.Errorf("Status = %s, want READY", s.Status)
 			}
 		})
 	}
