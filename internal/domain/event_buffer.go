@@ -9,13 +9,20 @@ type eventBuffer struct {
 	events      []Event
 }
 
-// record appends an event, stamping the buffer's aggregateID. The caller
-// supplies at so New() can match CreatedAt and clock injection stays open.
+// record appends an event with no payload. The caller supplies at so
+// New() can match CreatedAt and clock injection stays open.
 func (b *eventBuffer) record(name string, at time.Time) {
+	b.recordWith(name, at, nil)
+}
+
+// recordWith appends an event carrying a payload (ADR-006). The single
+// append path — record delegates here.
+func (b *eventBuffer) recordWith(name string, at time.Time, payload any) {
 	b.events = append(b.events, Event{
 		Name:        name,
 		At:          at,
 		AggregateID: b.aggregateID,
+		Payload:     payload,
 	})
 }
 

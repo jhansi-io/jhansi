@@ -18,6 +18,11 @@ const (
 	SandboxError    SandboxStatus = "ERROR"
 )
 
+type SandboxTransitionRejected struct {
+	From   SandboxStatus
+	Action string
+}
+
 type Sandbox struct {
 	ID        string
 	Status    SandboxStatus
@@ -41,6 +46,10 @@ func NewSandbox(id string) *Sandbox {
 // or ACTIVE (a run finished).
 func (s *Sandbox) MarkReady() error {
 	if s.Status != SandboxCreating && s.Status != SandboxActive {
+		s.recordWith("sandbox.ready_rejected", time.Now().UTC(), SandboxTransitionRejected{
+			From:   s.Status,
+			Action: "ready",
+		})
 		return fmt.Errorf("sandbox %s: cannot mark ready from %s", s.ID, s.Status)
 	}
 	s.Status = SandboxReady
@@ -52,6 +61,10 @@ func (s *Sandbox) MarkReady() error {
 // a run is starting. Enforces one live run per sandbox.
 func (s *Sandbox) MarkActive() error {
 	if s.Status != SandboxReady {
+		s.recordWith("sandbox.active_rejected", time.Now().UTC(), SandboxTransitionRejected{
+			From:   s.Status,
+			Action: "active",
+		})
 		return fmt.Errorf("sandbox %s: cannot mark active from %s", s.ID, s.Status)
 	}
 	s.Status = SandboxActive
@@ -63,6 +76,10 @@ func (s *Sandbox) MarkActive() error {
 // Legal only from READY — an active run resolves to READY first.
 func (s *Sandbox) MarkDeleted() error {
 	if s.Status != SandboxReady {
+		s.recordWith("sandbox.delete_rejected", time.Now().UTC(), SandboxTransitionRejected{
+			From:   s.Status,
+			Action: "delete",
+		})
 		return fmt.Errorf("sandbox %s: cannot mark deleted from %s", s.ID, s.Status)
 	}
 	s.Status = SandboxDeleted
@@ -74,6 +91,10 @@ func (s *Sandbox) MarkDeleted() error {
 // Legal only from READY.
 func (s *Sandbox) MarkExpired() error {
 	if s.Status != SandboxReady {
+		s.recordWith("sandbox.expire_rejected", time.Now().UTC(), SandboxTransitionRejected{
+			From:   s.Status,
+			Action: "expire",
+		})
 		return fmt.Errorf("sandbox %s: cannot expire from %s", s.ID, s.Status)
 	}
 	s.Status = SandboxExpired
@@ -90,6 +111,10 @@ func (s *Sandbox) MarkError() error {
 		s.record("sandbox.error", time.Now().UTC())
 		return nil
 	default:
+		s.recordWith("sandbox.error_rejected", time.Now().UTC(), SandboxTransitionRejected{
+			From:   s.Status,
+			Action: "error",
+		})
 		return fmt.Errorf("sandbox %s: cannot error from %s", s.ID, s.Status)
 	}
 }
