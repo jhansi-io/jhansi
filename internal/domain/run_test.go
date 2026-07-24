@@ -204,3 +204,18 @@ func TestRunRejectionPayload(t *testing.T) {
 		t.Errorf("payload = %+v, want {PREPARING preparing}", got)
 	}
 }
+
+func TestMarkRunningRejected(t *testing.T) {
+	r := NewRun("run_1", "sb_1")
+	r.DrainEvents() // clear run.created
+
+	if err := r.MarkRunning(); err == nil {
+		t.Fatal("MarkRunning from QUEUED: want error, got nil")
+	}
+	if r.Status != RunQueued {
+		t.Errorf("Status = %s, want QUEUED", r.Status)
+	}
+	if got := r.DrainEvents(); len(got) != 1 || got[0].Name != "run.running_rejected" {
+		t.Errorf("events = %v, want one run.running_rejected", got)
+	}
+}
