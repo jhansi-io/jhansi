@@ -76,9 +76,9 @@ func (s *Sandbox) MarkActive() error {
 // Legal only from READY — an active run resolves to READY first.
 func (s *Sandbox) MarkDeleted() error {
 	if s.Status != SandboxReady {
-		s.recordWith("sandbox.delete_rejected", time.Now().UTC(), SandboxTransitionRejected{
+		s.recordWith("sandbox.deleted_rejected", time.Now().UTC(), SandboxTransitionRejected{
 			From:   s.Status,
-			Action: "delete",
+			Action: "deleted",
 		})
 		return fmt.Errorf("sandbox %s: cannot mark deleted from %s", s.ID, s.Status)
 	}
@@ -91,9 +91,9 @@ func (s *Sandbox) MarkDeleted() error {
 // Legal only from READY.
 func (s *Sandbox) MarkExpired() error {
 	if s.Status != SandboxReady {
-		s.recordWith("sandbox.expire_rejected", time.Now().UTC(), SandboxTransitionRejected{
+		s.recordWith("sandbox.expired_rejected", time.Now().UTC(), SandboxTransitionRejected{
 			From:   s.Status,
-			Action: "expire",
+			Action: "expired",
 		})
 		return fmt.Errorf("sandbox %s: cannot expire from %s", s.ID, s.Status)
 	}

@@ -97,9 +97,9 @@ func TestSandboxTerminals(t *testing.T) {
 		wantErr   bool
 	}{
 		{"delete from ready", SandboxReady, (*Sandbox).MarkDeleted, SandboxDeleted, "sandbox.deleted", false},
-		{"delete from active", SandboxActive, (*Sandbox).MarkDeleted, "", "sandbox.delete_rejected", true},
+		{"delete from active", SandboxActive, (*Sandbox).MarkDeleted, "", "sandbox.deleted_rejected", true},
 		{"expire from ready", SandboxReady, (*Sandbox).MarkExpired, SandboxExpired, "sandbox.expired", false},
-		{"expire from creating", SandboxCreating, (*Sandbox).MarkExpired, "", "sandbox.expire_rejected", true},
+		{"expire from creating", SandboxCreating, (*Sandbox).MarkExpired, "", "sandbox.expired_rejected", true},
 		{"error from creating", SandboxCreating, (*Sandbox).MarkError, SandboxError, "sandbox.error", false},
 		{"error from active", SandboxActive, (*Sandbox).MarkError, SandboxError, "sandbox.error", false},
 		{"error from deleted", SandboxDeleted, (*Sandbox).MarkError, "", "sandbox.error_rejected", true},
@@ -169,7 +169,7 @@ func TestSandboxRejectionPayload(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload = %T, want SandboxTransitionRejected", events[0].Payload)
 	}
-	if got.From != SandboxActive || got.Action != "delete" {
-		t.Errorf("payload = %v, want {ACTIVE delete}", got)
+	if got.From != SandboxActive || got.Action != "deleted" {
+		t.Errorf("payload = %v, want {ACTIVE deleted}", got)
 	}
 }
