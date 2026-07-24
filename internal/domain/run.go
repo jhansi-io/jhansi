@@ -18,6 +18,11 @@ const (
 	RunCancelled RunStatus = "CANCELLED"
 )
 
+type RunTransitionRejected struct {
+	From   RunStatus
+	Action string
+}
+
 type Run struct {
 	ID        string
 	SandboxID string
@@ -41,6 +46,10 @@ func NewRun(id, sandboxID string) *Run {
 // MarkPreparing moves the run to PREPARING. Legal only from QUEUED.
 func (r *Run) MarkPreparing() error {
 	if r.Status != RunQueued {
+		r.recordWith("run.preparing_rejected", time.Now().UTC(), RunTransitionRejected{
+			From:   r.Status,
+			Action: "preparing",
+		})
 		return fmt.Errorf("run %s: cannot mark preparing from %s", r.ID, r.Status)
 	}
 	r.Status = RunPreparing
@@ -51,6 +60,10 @@ func (r *Run) MarkPreparing() error {
 // MarkRunning moves the run to Running. Legal only from PREPARING.
 func (r *Run) MarkRunning() error {
 	if r.Status != RunPreparing {
+		r.recordWith("run.running_rejected", time.Now().UTC(), RunTransitionRejected{
+			From:   r.Status,
+			Action: "running",
+		})
 		return fmt.Errorf("run %s: cannot mark running from %s", r.ID, r.Status)
 	}
 	r.Status = RunRunning
@@ -61,6 +74,10 @@ func (r *Run) MarkRunning() error {
 // MarkSucceeded moves the run to Succeeded. Legal only from RUNNING.
 func (r *Run) MarkSucceeded() error {
 	if r.Status != RunRunning {
+		r.recordWith("run.succeeded_rejected", time.Now().UTC(), RunTransitionRejected{
+			From:   r.Status,
+			Action: "succeeded",
+		})
 		return fmt.Errorf("run %s: cannot mark succeeded from %s", r.ID, r.Status)
 	}
 	r.Status = RunSucceeded
@@ -71,6 +88,10 @@ func (r *Run) MarkSucceeded() error {
 // MarkFailed moves the run to FAILED. Legal only from RUNNING.
 func (r *Run) MarkFailed() error {
 	if r.Status != RunRunning {
+		r.recordWith("run.failed_rejected", time.Now().UTC(), RunTransitionRejected{
+			From:   r.Status,
+			Action: "failed",
+		})
 		return fmt.Errorf("run %s: cannot mark failed from %s", r.ID, r.Status)
 	}
 	r.Status = RunFailed
@@ -81,6 +102,10 @@ func (r *Run) MarkFailed() error {
 // MarkTimedOut moves the run to TIMED_OUT. Legal only from RUNNING.
 func (r *Run) MarkTimedOut() error {
 	if r.Status != RunRunning {
+		r.recordWith("run.timed_out_rejected", time.Now().UTC(), RunTransitionRejected{
+			From:   r.Status,
+			Action: "timed_out",
+		})
 		return fmt.Errorf("run %s: cannot mark timed_out from %s", r.ID, r.Status)
 	}
 	r.Status = RunTimedOut
@@ -97,6 +122,10 @@ func (r *Run) MarkCancelled() error {
 		r.record("run.cancelled", time.Now().UTC())
 		return nil
 	default:
+		r.recordWith("run.cancelled_rejected", time.Now().UTC(), RunTransitionRejected{
+			From:   r.Status,
+			Action: "cancelled",
+		})
 		return fmt.Errorf("run %s: cannot mark cancelled from %s", r.ID, r.Status)
 	}
 }

@@ -69,8 +69,8 @@ func TestMarkSucceeded(t *testing.T) {
 	if err := q.MarkSucceeded(); err == nil {
 		t.Errorf("MarkSucceeded from QUEUED: want error, got nil")
 	}
-	if got := q.DrainEvents(); len(got) != 0 {
-		t.Errorf("rejected transition emitted %v, want nothing", got)
+	if got := q.DrainEvents(); len(got) != 1 || got[0].Name != "run.succeeded_rejected" {
+		t.Errorf("rejected transition emitted %v, want one run.succeeded_rejected", got)
 	}
 }
 
@@ -100,8 +100,8 @@ func TestMarkFailed(t *testing.T) {
 	if err := q.MarkFailed(); err == nil {
 		t.Errorf("MarkFailed from QUEUED: want error, got nil")
 	}
-	if got := q.DrainEvents(); len(got) != 0 {
-		t.Errorf("rejected transition emitted %v, want nothing", got)
+	if got := q.DrainEvents(); len(got) != 1 || got[0].Name != "run.failed_rejected" {
+		t.Errorf("rejected transition emitted %v, want one run.failed_rejected", got)
 	}
 }
 
@@ -134,8 +134,8 @@ func TestMarkTimedOut(t *testing.T) {
 	if err := q.MarkTimedOut(); err == nil {
 		t.Errorf("MarkTimedOut from QUEUED: want error, got nil")
 	}
-	if got := q.DrainEvents(); len(got) != 0 {
-		t.Errorf("rejected transition emitted %v, want nothing", got)
+	if got := q.DrainEvents(); len(got) != 1 || got[0].Name != "run.timed_out_rejected" {
+		t.Errorf("rejected transition emitted %v, want one run.timed_out_rejected", got)
 	}
 }
 
@@ -177,7 +177,30 @@ func TestMarkCancelled(t *testing.T) {
 	if err := q.MarkCancelled(); err == nil {
 		t.Errorf("MarkCancelled from SUCCEEDED: want error, got nil")
 	}
-	if got := q.DrainEvents(); len(got) != 0 {
-		t.Errorf("rejected transition emitted %v, want nothing", got)
+	if got := q.DrainEvents(); len(got) != 1 || got[0].Name != "run.cancelled_rejected" {
+		t.Errorf("rejected transition emitted %v, want one run.cancelled_rejected", got)
+	}
+}
+
+func TestRunRejectionPayload(t *testing.T) {
+	r := NewRun("run_1", "sb_1")
+	if err := r.MarkPreparing(); err != nil {
+		t.Fatalf("setup MarkPreparing: %v", err)
+	}
+	r.DrainEvents() // clear setup events
+
+	if err := r.MarkPreparing(); err == nil {
+		t.Fatalf("Mark Preparing from PREPARING: want error, got nil")
+	}
+	events := r.DrainEvents()
+	if len(events) != 1 || events[0].Name != "run.preparing_rejected" {
+		t.Fatalf("events = %v, want one run.preparing_rejected", events)
+	}
+	got, ok := events[0].Payload.(RunTransitionRejected)
+	if !ok {
+		t.Fatalf("payload = %T, want RunTransitionRejected", events[0].Payload)
+	}
+	if got.From != RunPreparing || got.Action != "preparing" {
+		t.Errorf("payload = %+v, want {PREPARING preparing}", got)
 	}
 }
