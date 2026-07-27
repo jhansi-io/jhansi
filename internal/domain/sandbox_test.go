@@ -169,7 +169,7 @@ func TestSandboxRejectionPayload(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload = %T, want SandboxTransitionRejected", events[0].Payload)
 	}
-	if got.From != SandboxActive || got.Action != "deleted" {
+	if got.From != SandboxActive || got.To != SandboxDeleted {
 		t.Errorf("payload = %v, want {ACTIVE deleted}", got)
 	}
 }

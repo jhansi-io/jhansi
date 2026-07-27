@@ -19,8 +19,8 @@ const (
 )
 
 type SandboxTransitionRejected struct {
-	From   SandboxStatus
-	Action string
+	From SandboxStatus
+	To   SandboxStatus
 }
 
 type Sandbox struct {
@@ -47,8 +47,8 @@ func NewSandbox(id string) *Sandbox {
 func (s *Sandbox) MarkReady() error {
 	if s.Status != SandboxCreating && s.Status != SandboxActive {
 		s.recordWith("sandbox.ready_rejected", time.Now().UTC(), SandboxTransitionRejected{
-			From:   s.Status,
-			Action: "ready",
+			From: s.Status,
+			To:   SandboxReady,
 		})
 		return fmt.Errorf("sandbox %s: cannot mark ready from %s", s.ID, s.Status)
 	}
@@ -62,8 +62,8 @@ func (s *Sandbox) MarkReady() error {
 func (s *Sandbox) MarkActive() error {
 	if s.Status != SandboxReady {
 		s.recordWith("sandbox.active_rejected", time.Now().UTC(), SandboxTransitionRejected{
-			From:   s.Status,
-			Action: "active",
+			From: s.Status,
+			To:   SandboxActive,
 		})
 		return fmt.Errorf("sandbox %s: cannot mark active from %s", s.ID, s.Status)
 	}
@@ -77,8 +77,8 @@ func (s *Sandbox) MarkActive() error {
 func (s *Sandbox) MarkDeleted() error {
 	if s.Status != SandboxReady {
 		s.recordWith("sandbox.deleted_rejected", time.Now().UTC(), SandboxTransitionRejected{
-			From:   s.Status,
-			Action: "deleted",
+			From: s.Status,
+			To:   SandboxDeleted,
 		})
 		return fmt.Errorf("sandbox %s: cannot mark deleted from %s", s.ID, s.Status)
 	}
@@ -92,8 +92,8 @@ func (s *Sandbox) MarkDeleted() error {
 func (s *Sandbox) MarkExpired() error {
 	if s.Status != SandboxReady {
 		s.recordWith("sandbox.expired_rejected", time.Now().UTC(), SandboxTransitionRejected{
-			From:   s.Status,
-			Action: "expired",
+			From: s.Status,
+			To:   SandboxExpired,
 		})
 		return fmt.Errorf("sandbox %s: cannot expire from %s", s.ID, s.Status)
 	}
@@ -112,8 +112,8 @@ func (s *Sandbox) MarkError() error {
 		return nil
 	default:
 		s.recordWith("sandbox.error_rejected", time.Now().UTC(), SandboxTransitionRejected{
-			From:   s.Status,
-			Action: "error",
+			From: s.Status,
+			To:   SandboxError,
 		})
 		return fmt.Errorf("sandbox %s: cannot error from %s", s.ID, s.Status)
 	}

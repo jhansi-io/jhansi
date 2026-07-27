@@ -200,8 +200,8 @@ func TestRunRejectionPayload(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload = %T, want RunTransitionRejected", events[0].Payload)
 	}
-	if got.From != RunPreparing || got.Action != "preparing" {
-		t.Errorf("payload = %+v, want {PREPARING preparing}", got)
+	if got.From != RunPreparing || got.To != RunPreparing {
+		t.Errorf("payload = %+v, want {RunPreparing}", got)
 	}
 }
 

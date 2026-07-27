@@ -8,8 +8,10 @@ import "time"
 // versioning remain deferred.
 //
 // Rejection events are named as the exact twin of the success event
-// they refused: sandbox.deleted -> sandbox.deleted_rejected. Payload
-// Action carries the same stem.
+// they refused: sandbox.deleted -> sandbox.deleted_rejected. Their
+// payload is {From, To} — both typed status enums — so a reader can
+// tell a redundant retry (From == To) from an illegal transition
+// (From != To) without parsing the name.
 type Event struct {
 	Name        string
 	At          time.Time
