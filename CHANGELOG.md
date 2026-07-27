@@ -10,3 +10,4 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - `POST /v1/sandboxes` — create a sandbox and get back its id and status.
 - `GET /v1/sandboxes/{id}` — fetch a sandbox by id; 404 if unknown.
+- `GET /v1/sandboxes` — list all sandboxes.

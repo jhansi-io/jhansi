@@ -48,6 +48,12 @@ func (s *ExecutionService) GetSandbox(id string) (*domain.Sandbox, error) {
 	return s.reg.Get(id)
 }
 
+// ListSandboxes returns every stored sandbox. A read: no mutation,
+// no events, no sink.
+func (s *ExecutionService) ListSandboxes() []*domain.Sandbox {
+	return s.reg.List()
+}
+
 // drainRecord drains an aggregate's buffered events and hands them
 // to the sink. The single home ADR-008 required: every operation
 // records through here, so write-ahead ordering becomes one later edit

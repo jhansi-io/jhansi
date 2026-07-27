@@ -59,11 +59,26 @@ func (h *Handler) GetSandbox(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// ListSandboxes handles GET /v1/sandboxes. Always 200 with a JSON
+// array; there's no failable path (ADR-009 patterns, no new decision).
+func (h *Handler) ListSandboxes(w http.ResponseWriter, r *http.Request) {
+	sbs := h.svc.ListSandboxes()
+
+	resp := make([]sandboxResponse, 0, len(sbs))
+	for _, sb := range sbs {
+		resp = append(resp, sandboxResponse{ID: sb.ID, Status: string(sb.Status)})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
 // Routes returns the mux with API's routes registered. Server
 // bootstraps (main, address, timeouts) stays deferred (ADR-009).
 func (h *Handler) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/sandboxes", h.CreateSandbox)
 	mux.HandleFunc("GET /v1/sandboxes/{id}", h.GetSandbox)
+	mux.HandleFunc("GET /v1/sandboxes", h.ListSandboxes)
 	return mux
 }
