@@ -42,6 +42,12 @@ func (s *ExecutionService) CreateSandbox() (*domain.Sandbox, error) {
 	return sb, nil
 }
 
+// GetSandbox returns the sandbox stored under id, or an error.
+// A read: no mutation, no events, no sink (ADR-010).
+func (s *ExecutionService) GetSandbox(id string) (*domain.Sandbox, error) {
+	return s.reg.Get(id)
+}
+
 // drainRecord drains an aggregate's buffered events and hands them
 // to the sink. The single home ADR-008 required: every operation
 // records through here, so write-ahead ordering becomes one later edit

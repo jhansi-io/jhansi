@@ -35,3 +35,46 @@ func TestCreateSandbox(t *testing.T) {
 		t.Errorf("status: got %q, want %q", resp.Status, "CREATING")
 	}
 }
+
+func TestGetSandbox(t *testing.T) {
+	sink, err := evidence.NewFileSink(filepath.Join(t.TempDir(), "events.jsonl"))
+	if err != nil {
+		t.Fatalf("new sink: %v", err)
+	}
+	svc := service.New(registry.New(), sink)
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	h := New(svc)
+
+	req := httptest.NewRequest("GET", "/v1/sandboxes/"+sb.ID, nil)
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp sandboxResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.ID != sb.ID {
+		t.Errorf("id: got %q, want %q", resp.ID, sb.ID)
+	}
+}
+
+func TestSandboxNotFound(t *testing.T) {
+	sink, err := evidence.NewFileSink(filepath.Join(t.TempDir(), "events.jsonl"))
+	if err != nil {
+		t.Fatalf("new sink: %v", err)
+	}
+	h := New(service.New(registry.New(), sink))
+	req := httptest.NewRequest("GET", "/v1/sandboxes/sb_missing", nil)
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status: got %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}

@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/jhansi-io/jhansi/internal/registry"
 	"github.com/jhansi-io/jhansi/internal/service"
 	"net/http"
 )
@@ -39,10 +41,29 @@ func (h *Handler) CreateSandbox(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// GetSandbox handles GET /v1/sandboxes/{id}. Unknown id → 404, any
+// other error → 500 (ADR-010) — inline, no mapping layer yet.
+func (h *Handler) GetSandbox(w http.ResponseWriter, r *http.Request) {
+	sb, err := h.svc.GetSandbox(r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, registry.ErrNotFound) {
+			http.Error(w, "sandbox not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	resp := sandboxResponse{ID: sb.ID, Status: string(sb.Status)}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
 // Routes returns the mux with API's routes registered. Server
 // bootstraps (main, address, timeouts) stays deferred (ADR-009).
 func (h *Handler) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/sandboxes", h.CreateSandbox)
+	mux.HandleFunc("GET /v1/sandboxes/{id}", h.GetSandbox)
 	return mux
 }
