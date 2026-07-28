@@ -73,9 +73,9 @@ func (s *Sandbox) MarkActive() error {
 }
 
 // MarkDeleted moves the sandbox to DELETED (explicit destroy).
-// Legal only from READY — an active run resolves to READY first.
+// Legal from CREATING (still provisioning) or READY(idle).
 func (s *Sandbox) MarkDeleted() error {
-	if s.Status != SandboxReady {
+	if s.Status != SandboxCreating && s.Status != SandboxReady {
 		s.recordWith("sandbox.deleted_rejected", time.Now().UTC(), SandboxTransitionRejected{
 			From: s.Status,
 			To:   SandboxDeleted,

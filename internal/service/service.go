@@ -42,6 +42,25 @@ func (s *ExecutionService) CreateSandbox() (*domain.Sandbox, error) {
 	return sb, nil
 }
 
+// DeleteSandbox marks a sandbox DELETED and records the transition.
+// Idempotent: deleting an already-DELETED sandbox is success, since the
+// desired state is reached. MarkDeleted and drainAndRecord run whatever
+// the state — the rejection row is the one an auditor reads (ADR-011).
+func (s *ExecutionService) DeleteSandbox(id string) error {
+	sb, err := s.reg.Get(id)
+	if err != nil {
+		return err
+	}
+	markErr := sb.MarkDeleted()
+	if err := s.drainAndRecord(sb); err != nil {
+		return err
+	}
+	if markErr != nil && sb.Status != domain.SandboxDeleted {
+		return markErr
+	}
+	return nil
+}
+
 // GetSandbox returns the sandbox stored under id, or an error.
 // A read: no mutation, no events, no sink (ADR-010).
 func (s *ExecutionService) GetSandbox(id string) (*domain.Sandbox, error) {

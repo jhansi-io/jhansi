@@ -73,6 +73,22 @@ func (h *Handler) ListSandboxes(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// DeleteSandbox handles DELETE /v1/sandboxes/{id}. Idempotent: a
+// successful or already-deleted sandbox → 204, unknown id → 404, any
+// other error → 500 (ADR-011) — inline, no mapping layer yet.
+func (h *Handler) DeleteSandbox(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.DeleteSandbox(r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, registry.ErrNotFound) {
+			http.Error(w, "sandbox not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // Routes returns the mux with API's routes registered. Server
 // bootstraps (main, address, timeouts) stays deferred (ADR-009).
 func (h *Handler) Routes() *http.ServeMux {
@@ -80,5 +96,6 @@ func (h *Handler) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /v1/sandboxes", h.CreateSandbox)
 	mux.HandleFunc("GET /v1/sandboxes/{id}", h.GetSandbox)
 	mux.HandleFunc("GET /v1/sandboxes", h.ListSandboxes)
+	mux.HandleFunc("DELETE /v1/sandboxes/{id}", h.DeleteSandbox)
 	return mux
 }
