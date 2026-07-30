@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"github.com/jhansi-io/jhansi/internal/domain"
+	"github.com/jhansi-io/jhansi/internal/isolation"
 	"github.com/jhansi-io/jhansi/internal/registry"
 	"strings"
 	"testing"
@@ -25,7 +27,8 @@ func (f *fakeSink) Record(events []domain.Event) error {
 
 func TestCreateSandbox(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink)
+
+	svc := New(registry.New(), sink, &isolation.StubEngine{})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -64,7 +67,7 @@ func TestCreateSandbox(t *testing.T) {
 
 func TestCreateSandboxFailure(t *testing.T) {
 	sinkErr := errors.New("sink down")
-	svc := New(registry.New(), &fakeSink{err: sinkErr})
+	svc := New(registry.New(), &fakeSink{err: sinkErr}, &isolation.StubEngine{})
 
 	sb, err := svc.CreateSandbox()
 	if !errors.Is(err, sinkErr) {
@@ -77,7 +80,7 @@ func TestCreateSandboxFailure(t *testing.T) {
 
 func TestDeleteSandbox(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink)
+	svc := New(registry.New(), sink, &isolation.StubEngine{})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -111,7 +114,7 @@ func TestDeleteSandbox(t *testing.T) {
 
 func TestDeleteSandboxIdempotent(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink)
+	svc := New(registry.New(), sink, &isolation.StubEngine{})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -147,7 +150,7 @@ func TestDeleteSandboxIdempotent(t *testing.T) {
 }
 
 func TestDeleteSandboxNotFound(t *testing.T) {
-	svc := New(registry.New(), &fakeSink{})
+	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{})
 	err := svc.DeleteSandbox("sb_missing")
 	if !errors.Is(err, registry.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
@@ -156,7 +159,7 @@ func TestDeleteSandboxNotFound(t *testing.T) {
 
 func TestDeleteSandboxRecordFailure(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink)
+	svc := New(registry.New(), sink, &isolation.StubEngine{})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -168,5 +171,48 @@ func TestDeleteSandboxRecordFailure(t *testing.T) {
 	sink.err = sinkErr
 	if err := svc.DeleteSandbox(sb.ID); !errors.Is(err, sinkErr) {
 		t.Fatalf("err = %v, want %v", err, sinkErr)
+	}
+}
+
+func TestExecHappyPath(t *testing.T) {
+	sink := &fakeSink{}
+	svc := New(registry.New(), sink, &isolation.StubEngine{})
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("create sandbox: %v", err)
+	}
+
+	run, result, err := svc.Exec(context.Background(), sb.ID, "echo hello")
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if run.Status != domain.RunSucceeded {
+		t.Errorf("run status = %q, want %q", run.Status, domain.RunSucceeded)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("exit code = %d, want 0", result.ExitCode)
+	}
+	if result.Stdout != "echo hello" {
+		t.Errorf("stdout = %q, want the command echoed", result.Stdout)
+	}
+	if sb.Status != domain.SandboxReady {
+		t.Errorf("sandbox status = %q, want %q — released after the run", sb.Status, domain.SandboxReady)
+	}
+	// The spine: exec drains both aggregates — the sandbox's claim and
+	// release, then the run's whole lifecycle. Order is sandbox-then-run
+	// (ADR-015, arbitrary pending the event-model ADR).
+	want := []string{
+		"sandbox.created", "sandbox.ready",
+		"sandbox.active", "sandbox.idle",
+		"run.created", "run.preparing", "run.running", "run.succeeded",
+	}
+	if len(sink.events) != len(want) {
+		t.Fatalf("recorded %d events, want %d", len(sink.events), len(want))
+	}
+	for i, name := range want {
+		if sink.events[i].Name != name {
+			t.Errorf("event %d = %q, want %q", i, sink.events[i].Name, name)
+		}
 	}
 }

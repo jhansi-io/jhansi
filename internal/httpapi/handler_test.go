@@ -3,11 +3,13 @@ package httpapi
 import (
 	"encoding/json"
 	"github.com/jhansi-io/jhansi/internal/evidence"
+	"github.com/jhansi-io/jhansi/internal/isolation"
 	"github.com/jhansi-io/jhansi/internal/registry"
 	"github.com/jhansi-io/jhansi/internal/service"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -16,7 +18,7 @@ func TestCreateSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	h := New(service.New(registry.New(), sink))
+	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}))
 	req := httptest.NewRequest("POST", "/v1/sandboxes", nil)
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
@@ -41,7 +43,7 @@ func TestGetSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	svc := service.New(registry.New(), sink)
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
 	sb, err := svc.CreateSandbox()
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -69,7 +71,7 @@ func TestSandboxNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	h := New(service.New(registry.New(), sink))
+	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}))
 	req := httptest.NewRequest("GET", "/v1/sandboxes/sb_missing", nil)
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
@@ -84,7 +86,7 @@ func TestListSandboxesEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	h := New(service.New(registry.New(), sink))
+	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}))
 
 	req := httptest.NewRequest("GET", "/v1/sandboxes", nil)
 	rec := httptest.NewRecorder()
@@ -104,7 +106,7 @@ func TestListSandboxes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	svc := service.New(registry.New(), sink)
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
 	a, err := svc.CreateSandbox()
 	if err != nil {
 		t.Fatalf("seed a: %v", err)
@@ -140,7 +142,7 @@ func TestDeleteSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	svc := service.New(registry.New(), sink)
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
 	sb, err := svc.CreateSandbox()
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -164,7 +166,7 @@ func TestDeleteSandboxNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	h := New(service.New(registry.New(), sink))
+	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}))
 
 	req := httptest.NewRequest("DELETE", "/v1/sandboxes/sb_missing", nil)
 	rec := httptest.NewRecorder()
@@ -172,5 +174,46 @@ func TestDeleteSandboxNotFound(t *testing.T) {
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status: got %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestExec(t *testing.T) {
+	sink, err := evidence.NewFileSink(filepath.Join(t.TempDir(), "events.jsonl"))
+	if err != nil {
+		t.Fatalf("new sink: %v", err)
+	}
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("CreateSandbox: %v", err)
+	}
+	h := New(svc)
+
+	body := strings.NewReader(`{"command": "echo hello"}`)
+	req := httptest.NewRequest("POST", "/v1/sandboxes/"+sb.ID+"/exec", body)
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp execResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !strings.HasPrefix(resp.RunID, "run_") {
+		t.Errorf("run_id = %q, want run_ prefix", resp.RunID)
+	}
+	if resp.Status != "SUCCEEDED" {
+		t.Errorf("status = %q, want SUCCEEDED", resp.Status)
+	}
+	if resp.ExitCode != 0 {
+		t.Errorf("exit_code = %d, want 0", resp.ExitCode)
+	}
+	if resp.Stdout != "echo hello" {
+		t.Errorf("stdout = %q, want the command echoed", resp.Stdout)
 	}
 }

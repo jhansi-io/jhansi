@@ -20,6 +20,26 @@ type sandboxResponse struct {
 	Status string `json:"status"`
 }
 
+// execRequest is the wire shape for an exec call. One field: the seam
+// takes a bare command string and no language field (ADR-012), and the
+// DTO mirrors it exactly.
+type execRequest struct {
+	Command string `json:"command"`
+}
+
+// execResponse is the wire shape for an exec result — assembled from the
+// engine's ExecResult plus the run id, never from a lookup (ADR-015).
+// Deliberately not isolation.ExecResult: that is the seam's contract, it
+// carries TimedOut which never goes on the wire, and it has never heard
+// of a run.
+type execResponse struct {
+	RunID    string `json:"run_id"`
+	Status   string `json:"status"`
+	ExitCode int    `json:"exit_code"`
+	Stdout   string `json:"stdout"`
+	Stderr   string `json:"stderr"`
+}
+
 // New constructs a Handler over an ExecutionService
 func New(svc *service.ExecutionService) *Handler {
 	return &Handler{svc: svc}
@@ -89,6 +109,37 @@ func (h *Handler) DeleteSandbox(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Exec handles POST /v1/sandboxes/{id}/exec. Unknown sandbox → 404, any
+// other error → 500 (ADR-015) — inline, no mapping layer yet. Happy path
+// only: status is constant SUCCEEDED until ADR-016 adds the failure
+// surface, but it ships now so clients never key off exit_code.
+func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
+	var req execRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	run, result, err := h.svc.Exec(r.Context(), r.PathValue("id"), req.Command)
+	if err != nil {
+		if errors.Is(err, registry.ErrNotFound) {
+			http.Error(w, "sandbox not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	resp := execResponse{
+		RunID:    run.ID,
+		Status:   string(run.Status),
+		ExitCode: result.ExitCode,
+		Stdout:   result.Stdout,
+		Stderr:   result.Stderr,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
 // Routes returns the mux with API's routes registered. Server
 // bootstraps (main, address, timeouts) stays deferred (ADR-009).
 func (h *Handler) Routes() *http.ServeMux {
@@ -97,5 +148,6 @@ func (h *Handler) Routes() *http.ServeMux {
 	mux.HandleFunc("GET /v1/sandboxes/{id}", h.GetSandbox)
 	mux.HandleFunc("GET /v1/sandboxes", h.ListSandboxes)
 	mux.HandleFunc("DELETE /v1/sandboxes/{id}", h.DeleteSandbox)
+	mux.HandleFunc("POST /v1/sandboxes/{id}/exec", h.Exec)
 	return mux
 }

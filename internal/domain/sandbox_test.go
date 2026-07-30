@@ -89,9 +89,9 @@ func TestMarkActive(t *testing.T) {
 
 func TestMarkIdle(t *testing.T) {
 	tests := []struct {
-		name	string
-		from	SandboxStatus
-		wantErr	bool
+		name    string
+		from    SandboxStatus
+		wantErr bool
 	}{
 		{"from active", SandboxActive, false},
 		{"from ready", SandboxReady, true},

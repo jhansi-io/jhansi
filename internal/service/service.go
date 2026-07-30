@@ -1,9 +1,11 @@
 package service
 
 import (
+	"context"
 	"github.com/jhansi-io/jhansi/internal/domain"
 	"github.com/jhansi-io/jhansi/internal/evidence"
 	"github.com/jhansi-io/jhansi/internal/id"
+	"github.com/jhansi-io/jhansi/internal/isolation"
 	"github.com/jhansi-io/jhansi/internal/registry"
 )
 
@@ -15,13 +17,14 @@ type eventSource interface {
 // registry and sink, and routes every drain-and-record through one
 // helper so write-ahead ordering stays a single later edit (ADR=008).
 type ExecutionService struct {
-	reg  *registry.Registry
-	sink evidence.Sink
+	reg    *registry.Registry
+	sink   evidence.Sink
+	engine isolation.SandboxEngine
 }
 
 // New constructs an ExecutionService over a registry and sink.
-func New(reg *registry.Registry, sink evidence.Sink) *ExecutionService {
-	return &ExecutionService{reg: reg, sink: sink}
+func New(reg *registry.Registry, sink evidence.Sink, engine isolation.SandboxEngine) *ExecutionService {
+	return &ExecutionService{reg: reg, sink: sink, engine: engine}
 }
 
 // CreateSandbox mints an id, constructs a sandbox, stores it, and
@@ -47,6 +50,58 @@ func (s *ExecutionService) CreateSandbox() (*domain.Sandbox, error) {
 		return nil, err
 	}
 	return sb, nil
+}
+
+// Exec runs a command in a sandbox: claims it, drives a Run through its
+// lifecycle, calls the isolation seam, then releases the sandbox and
+// records both aggregates (ADR-015). Happy path only — a non-zero exit
+// or a timeout is ADR-016.
+//
+// The run id is minted before MarkActive deliberately: id.New can fail,
+// and MarkExpired is READY-only, so claiming first would leak a
+// permanently unreapable ACTIVE sandbox on a rand blip.
+//
+// The Run is not stored. It is minted, transitioned, drained and dropped -
+// its only durable trace is its events in the sink.
+func (s *ExecutionService) Exec(ctx context.Context, sandboxID, command string) (*domain.Run, isolation.ExecResult, error) {
+
+	sb, err := s.reg.Get(sandboxID)
+	if err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+
+	runID, err := id.New("run")
+	if err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+
+	if err := sb.MarkActive(); err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+	run := domain.NewRun(runID, sandboxID)
+	if err := run.MarkPreparing(); err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+	if err := run.MarkRunning(); err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+	result, err := s.engine.Exec(ctx, sandboxID, command)
+	if err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+	if err := run.MarkSucceeded(); err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+	if err := sb.MarkIdle(); err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+	if err := s.drainAndRecord(sb); err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+	if err := s.drainAndRecord(run); err != nil {
+		return nil, isolation.ExecResult{}, err
+	}
+	return run, result, nil
 }
 
 // DeleteSandbox marks a sandbox DELETED and records the transition.
