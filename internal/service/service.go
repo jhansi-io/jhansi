@@ -7,6 +7,10 @@ import (
 	"github.com/jhansi-io/jhansi/internal/registry"
 )
 
+type eventSource interface {
+	DrainEvents() []domain.Event
+}
+
 // ExecutionService orchestrates mutating operations: It holds the
 // registry and sink, and routes every drain-and-record through one
 // helper so write-ahead ordering stays a single later edit (ADR=008).
@@ -80,7 +84,7 @@ func (s *ExecutionService) ListSandboxes() []*domain.Sandbox {
 // to the sink. The single home ADR-008 required: every operation
 // records through here, so write-ahead ordering becomes one later edit
 // rather than a change at every call site (ADR-007).
-func (s *ExecutionService) drainAndRecord(sb *domain.Sandbox) error {
-	events := sb.DrainEvents()
+func (s *ExecutionService) drainAndRecord(src eventSource) error {
+	events := src.DrainEvents()
 	return s.sink.Record(events)
 }
