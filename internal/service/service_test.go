@@ -31,8 +31,8 @@ func TestCreateSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSandbox: %v", err)
 	}
-	if sb.Status != domain.SandboxCreating {
-		t.Errorf("status = %s, want %s", sb.Status, domain.SandboxCreating)
+	if sb.Status != domain.SandboxReady {
+		t.Errorf("status = %s, want %s", sb.Status, domain.SandboxReady)
 	}
 	if !strings.HasPrefix(sb.ID, "sb_") {
 		t.Errorf("id = %q, want sb_ prefix", sb.ID)
@@ -48,11 +48,14 @@ func TestCreateSandbox(t *testing.T) {
 	}
 
 	// Recorded: the creation event drained through the sink.
-	if len(sink.events) != 1 {
-		t.Fatalf("recorded %d events, want 1", len(sink.events))
+	if len(sink.events) != 2 {
+		t.Fatalf("recorded %d events, want 2", len(sink.events))
 	}
 	if sink.events[0].Name != "sandbox.created" {
 		t.Errorf("event = %q, want sandbox.created", sink.events[0].Name)
+	}
+	if sink.events[1].Name != "sandbox.ready" {
+		t.Errorf("event = %q, want sandbox.ready", sink.events[1].Name)
 	}
 	if sink.events[0].AggregateID != sb.ID {
 		t.Errorf("event aggregateID = %q, want %q", sink.events[0].AggregateID, sb.ID)
@@ -98,10 +101,10 @@ func TestDeleteSandbox(t *testing.T) {
 	}
 
 	// created + deleted drained through the sink.
-	if len(sink.events) != 2 {
+	if len(sink.events) != 3 {
 		t.Fatalf("recorded %d events, want 2", len(sink.events))
 	}
-	if sink.events[1].Name != "sandbox.deleted" {
+	if sink.events[2].Name != "sandbox.deleted" {
 		t.Errorf("event = %q, want sandbox.deleted", sink.events[1].Name)
 	}
 }
@@ -127,10 +130,10 @@ func TestDeleteSandboxIdempotent(t *testing.T) {
 
 	// The redundant retry is still recorded:
 	// Created, deleted, deleted_rejected {DELETED, DELETED}.
-	if len(sink.events) != 3 {
+	if len(sink.events) != 4 {
 		t.Fatalf("recorded %d events, want 3", len(sink.events))
 	}
-	last := sink.events[2]
+	last := sink.events[3]
 	if last.Name != "sandbox.deleted_rejected" {
 		t.Fatalf("event = %q, want sandbox.deleted_rejected", last.Name)
 	}

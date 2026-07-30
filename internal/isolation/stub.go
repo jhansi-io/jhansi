@@ -16,5 +16,5 @@ func (e *StubEngine) Exec(ctx context.Context, sandboxID, command string) (ExecR
 	if e.ExecFunc != nil {
 		return e.ExecFunc(ctx, sandboxID, command)
 	}
-	return ExecResult{ExitCode:0, Stdout: command}, nil
+	return ExecResult{ExitCode: 0, Stdout: command}, nil
 }

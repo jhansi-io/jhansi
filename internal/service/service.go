@@ -32,6 +32,9 @@ func (s *ExecutionService) CreateSandbox() (*domain.Sandbox, error) {
 	}
 
 	sb := domain.NewSandbox(sbID)
+	if err := sb.MarkReady(); err != nil {
+		return nil, err
+	}
 	if err := s.reg.Add(sb); err != nil {
 		return nil, err
 	}

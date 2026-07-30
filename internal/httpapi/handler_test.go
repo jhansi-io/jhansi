@@ -31,8 +31,8 @@ func TestCreateSandbox(t *testing.T) {
 	if resp.ID == "" {
 		t.Error("id: got empty, want non-empty")
 	}
-	if resp.Status != "CREATING" {
-		t.Errorf("status: got %q, want %q", resp.Status, "CREATING")
+	if resp.Status != "READY" {
+		t.Errorf("status: got %q, want %q", resp.Status, "READY")
 	}
 }
 
