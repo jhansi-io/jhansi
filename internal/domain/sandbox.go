@@ -42,10 +42,10 @@ func NewSandbox(id string) *Sandbox {
 	return s
 }
 
-// MarkReady moves the sandbox to READY. Legal from CREATING (came up)
-// or ACTIVE (a run finished).
+// MarkReady moves the sandbox to READY: provisioning finished, the
+// sandbox is available.  Legal only from CREATING.
 func (s *Sandbox) MarkReady() error {
-	if s.Status != SandboxCreating && s.Status != SandboxActive {
+	if s.Status != SandboxCreating {
 		s.recordWith("sandbox.ready_rejected", time.Now().UTC(), SandboxTransitionRejected{
 			From: s.Status,
 			To:   SandboxReady,
@@ -69,6 +69,22 @@ func (s *Sandbox) MarkActive() error {
 	}
 	s.Status = SandboxActive
 	s.record("sandbox.active", time.Now().UTC())
+	return nil
+}
+
+// MarkIdle moves the sandbox back to READY: a run finished, the sandbox
+// is free again. Legal only from ACTIVE — the release half of the
+// claim/release pair (MarkActive claims).
+func (s *Sandbox) MarkIdle() error {
+	if s.Status != SandboxActive {
+		s.recordWith("sandbox.idle_rejected", time.Now().UTC(), SandboxTransitionRejected{
+			From: s.Status,
+			To:   SandboxReady,
+		})
+		return fmt.Errorf("sandbox %s: cannot mark idle from %s", s.ID, s.Status)
+	}
+	s.Status = SandboxReady
+	s.record("sandbox.idle", time.Now().UTC())
 	return nil
 }
 
