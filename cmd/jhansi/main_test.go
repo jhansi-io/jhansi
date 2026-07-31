@@ -1,13 +1,13 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"testing"
-	"net/http"
-	"encoding/json"
 	"strings"
-	"net/http/httptest"
+	"testing"
 )
 
 // TestNewServerCreatesDataDir asserts construction is self-sufficient: it
