@@ -15,7 +15,7 @@ type eventSource interface {
 
 // ExecutionService orchestrates mutating operations: It holds the
 // registry and sink, and routes every drain-and-record through one
-// helper so write-ahead ordering stays a single later edit (ADR=008).
+// helper so write-ahead ordering stays a single later edit (ADR-008).
 type ExecutionService struct {
 	reg    *registry.Registry
 	sink   evidence.Sink
@@ -55,7 +55,7 @@ func (s *ExecutionService) CreateSandbox() (*domain.Sandbox, error) {
 // Exec runs a command in a sandbox: claims it, drives a Run through its
 // lifecycle, calls the isolation seam, then releases the sandbox and
 // records both aggregates (ADR-015). Happy path only — a non-zero exit
-// or a timeout is ADR-016.
+// or a timeout is ADR-017.
 //
 // The run id is minted before MarkActive deliberately: id.New can fail,
 // and MarkExpired is READY-only, so claiming first would leak a
@@ -135,7 +135,7 @@ func (s *ExecutionService) ListSandboxes() []*domain.Sandbox {
 	return s.reg.List()
 }
 
-// drainRecord drains an aggregate's buffered events and hands them
+// drainAndRecord drains an aggregate's buffered events and hands them
 // to the sink. The single home ADR-008 required: every operation
 // records through here, so write-ahead ordering becomes one later edit
 // rather than a change at every call site (ADR-007).

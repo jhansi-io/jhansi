@@ -17,7 +17,7 @@ first production caller of `MarkActive`, `MarkIdle`, and the entire `Run`
 state machine.
 
 Scope is the happy path only — the engine returns exit 0. EVery failure
-mode is ADR-016. Splitting them keeps this ADR about *choreography*: what
+mode is ADR-017. Splitting them keeps this ADR about *choreography*: what
 happens, in what order, on which aggregate. Mixing the failure surface in
 would bury that under a mapping table.
 
@@ -56,7 +56,7 @@ The service maps the engine's result onto a Run terminal; `internal/domain`
 does not import `internal/isolation`. A backend type must never reach the
 aggregate. The mapping itself is one line here — exit 0 → `MarkSucceeded`
 — because the happy path has exactly one outcome. The full table is
-ADR-016.
+ADR-017.
 
 ### The Run is not stored
 
@@ -104,7 +104,7 @@ it would put any field a future Docker backend adds into the public API by
 accident.
 
 `status` ships now although it is constant. Without it the first client
-keys off `exit_code == 0` to mean success, and ADR-016 adds TIMED_OUT,
+keys off `exit_code == 0` to mean success, and ADR-017 adds TIMED_OUT,
 where there is no meaningful exit code at all.
 
 ## Consequences
@@ -119,13 +119,13 @@ where there is no meaningful exit code at all.
 - Three client statuses on this route: 400 on a malformed body, 404 on
   an unknown sandbox, 500 otherwise. Mapping stays inline — a decode
   failure is a DTO concern the handler answers itself, not a service
-  error needing translation. ADR-016's 409 is the first status that
+  error needing translation. ADR-017's 409 is the first status that
   comes back through the service, and that is the one that earns a
   mapping layer.
   
 ## Deferred
 
-- **ADR-016, the failure surface:** nin-zero exit → FAILED, `TimedOut` → 
+- **ADR-017, the failure surface:** non-zero exit → FAILED, `TimedOut` → 
   TIMED_OUT, infra error → sandbox ERROR, and a typed 409 on an
   already-ACTIVE sandbox.
 - **Write-ahead ordering:** its own ADR. `engine.Exec` is a failable

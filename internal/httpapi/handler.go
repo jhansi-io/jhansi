@@ -111,7 +111,7 @@ func (h *Handler) DeleteSandbox(w http.ResponseWriter, r *http.Request) {
 
 // Exec handles POST /v1/sandboxes/{id}/exec. Unknown sandbox → 404, any
 // other error → 500 (ADR-015) — inline, no mapping layer yet. Happy path
-// only: status is constant SUCCEEDED until ADR-016 adds the failure
+// only: status is constant SUCCEEDED until ADR-017 adds the failure
 // surface, but it ships now so clients never key off exit_code.
 func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
 	var req execRequest
