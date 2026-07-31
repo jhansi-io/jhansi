@@ -109,10 +109,10 @@ func (h *Handler) DeleteSandbox(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Exec handles POST /v1/sandboxes/{id}/exec. Unknown sandbox → 404, any
-// other error → 500 (ADR-015) — inline, no mapping layer yet. Happy path
-// only: status is constant SUCCEEDED until ADR-017 adds the failure
-// surface, but it ships now so clients never key off exit_code.
+// Exec handles POST /v1/sandboxes/{id}/exec. Unknown sandbox → 404;
+// infra fault → 500; a completed run — success, non-zero exit, or timeout
+// — is 200 with the real terminal in Status (ADR-017). Mapping stays
+// inline; the busy-sandbox 409 and a mapping layer are ADR-018.
 func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
 	var req execRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

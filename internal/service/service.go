@@ -76,32 +76,41 @@ func (s *ExecutionService) Exec(ctx context.Context, sandboxID, command string) 
 	}
 
 	if err := sb.MarkActive(); err != nil {
+		if drainErr := s.drainAndRecord(sb); drainErr != nil {
+			return nil, isolation.ExecResult{}, drainErr
+		}
 		return nil, isolation.ExecResult{}, err
 	}
 	run := domain.NewRun(runID, sandboxID)
 	if err := run.MarkPreparing(); err != nil {
-		return nil, isolation.ExecResult{}, err
+		panic(err) // unreachable: a fresh run is QUEUED, MarkPreparing is legal from QUEUED
 	}
 	if err := run.MarkRunning(); err != nil {
-		return nil, isolation.ExecResult{}, err
+		panic(err) // unreachable: MarkPreparing left it PREPARING, MarkRunning is legal from PREPARING
 	}
 	result, err := s.engine.Exec(ctx, sandboxID, command)
-	if err != nil {
-		return nil, isolation.ExecResult{}, err
+
+	switch {
+	case err != nil:
+		sb.MarkError()
+		run.MarkFailed()
+	case result.TimedOut:
+		sb.MarkIdle()
+		run.MarkTimedOut()
+	case result.ExitCode != 0:
+		sb.MarkIdle()
+		run.MarkFailed()
+	default:
+		sb.MarkIdle()
+		run.MarkSucceeded()
 	}
-	if err := run.MarkSucceeded(); err != nil {
-		return nil, isolation.ExecResult{}, err
+	if drainErr := s.drainAndRecord(sb); drainErr != nil {
+		return run, result, drainErr
 	}
-	if err := sb.MarkIdle(); err != nil {
-		return nil, isolation.ExecResult{}, err
+	if drainErr := s.drainAndRecord(run); drainErr != nil {
+		return run, result, drainErr
 	}
-	if err := s.drainAndRecord(sb); err != nil {
-		return nil, isolation.ExecResult{}, err
-	}
-	if err := s.drainAndRecord(run); err != nil {
-		return nil, isolation.ExecResult{}, err
-	}
-	return run, result, nil
+	return run, result, err
 }
 
 // DeleteSandbox marks a sandbox DELETED and records the transition.

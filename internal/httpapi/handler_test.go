@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/jhansi-io/jhansi/internal/evidence"
 	"github.com/jhansi-io/jhansi/internal/isolation"
@@ -215,5 +216,46 @@ func TestExec(t *testing.T) {
 	}
 	if resp.Stdout != "echo hello" {
 		t.Errorf("stdout = %q, want the command echoed", resp.Stdout)
+	}
+}
+
+func TestExecNonZeroExitIs200(t *testing.T) {
+	sink, err := evidence.NewFileSink(filepath.Join(t.TempDir(), "events.jsonl"))
+	if err != nil {
+		t.Fatalf("new sink: %v", err)
+	}
+	engine := &isolation.StubEngine{
+		ExecFunc: func(ctx context.Context, sandboxID, command string) (isolation.ExecResult, error) {
+			return isolation.ExecResult{ExitCode: 1, Stderr: "boom"}, nil
+		},
+	}
+	svc := service.New(registry.New(), sink, engine)
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("CreateSandbox: %v", err)
+	}
+	h := New(svc)
+
+	body := strings.NewReader(`{"command": "false"}`)
+	req := httptest.NewRequest("POST", "/v1/sandboxes/"+sb.ID+"/exec", body)
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, req)
+
+	// The command failed; the HTTP call did not. This is the whole 200-not-500 decision.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 — a failed command is a successful call", rec.Code)
+	}
+
+	var resp execResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Status != "FAILED" {
+		t.Errorf("status = %q, want FAILED", resp.Status)
+	}
+	if resp.ExitCode != 1 {
+		t.Errorf("exit_code = %d, want 1", resp.ExitCode)
 	}
 }

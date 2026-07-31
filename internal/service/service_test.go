@@ -216,3 +216,157 @@ func TestExecHappyPath(t *testing.T) {
 		}
 	}
 }
+
+func TestExecNonZeroExit(t *testing.T) {
+	sink := &fakeSink{}
+	engine := &isolation.StubEngine{
+		ExecFunc: func(ctx context.Context, sandboxID, command string) (isolation.ExecResult, error) {
+			return isolation.ExecResult{ExitCode: 1, Stderr: "boom"}, nil
+		},
+	}
+	svc := New(registry.New(), sink, engine)
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("create sandbox: %v", err)
+	}
+
+	run, result, err := svc.Exec(context.Background(), sb.ID, "false")
+	if err != nil {
+		t.Fatalf("exec: %v — a non-zero exit is a completed run, not an error", err)
+	}
+	if run.Status != domain.RunFailed {
+		t.Errorf("run status = %q, want %q", run.Status, domain.RunFailed)
+	}
+	if result.ExitCode != 1 {
+		t.Errorf("exit code = %d, want 1", result.ExitCode)
+	}
+	if sb.Status != domain.SandboxReady {
+		t.Errorf("sandbox status = %q, want %q — released after a failed run", sb.Status, domain.SandboxReady)
+	}
+
+	want := []string{
+		"sandbox.created", "sandbox.ready",
+		"sandbox.active", "sandbox.idle",
+		"run.created", "run.preparing", "run.running", "run.failed",
+	}
+	if len(sink.events) != len(want) {
+		t.Fatalf("recorded %d events, want %d", len(sink.events), len(want))
+	}
+	for i, name := range want {
+		if sink.events[i].Name != name {
+			t.Errorf("event %d = %q, want %q", i, sink.events[i].Name, name)
+		}
+	}
+}
+
+func TestExecTimedOut(t *testing.T) {
+	sink := &fakeSink{}
+	engine := &isolation.StubEngine{
+		ExecFunc: func(ctx context.Context, sandboxID, command string) (isolation.ExecResult, error) {
+			return isolation.ExecResult{TimedOut: true}, nil
+		},
+	}
+	svc := New(registry.New(), sink, engine)
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("create sandbox: %v", err)
+	}
+
+	run, _, err := svc.Exec(context.Background(), sb.ID, "sleep 999")
+	if err != nil {
+		t.Fatalf("exec: %v — a timeout is a completed run, not an error", err)
+	}
+	if run.Status != domain.RunTimedOut {
+		t.Errorf("run status = %q, want %q", run.Status, domain.RunTimedOut)
+	}
+	if sb.Status != domain.SandboxReady {
+		t.Errorf("sandbox status = %q, want %q — released after a timeout", sb.Status, domain.SandboxReady)
+	}
+	want := []string{
+		"sandbox.created", "sandbox.ready",
+		"sandbox.active", "sandbox.idle",
+		"run.created", "run.preparing", "run.running", "run.timed_out",
+	}
+	if len(sink.events) != len(want) {
+		t.Fatalf("recorded %d events, want %d", len(sink.events), len(want))
+	}
+	for i, name := range want {
+		if sink.events[i].Name != name {
+			t.Errorf("event %d = %q, want %q", i, sink.events[i].Name, name)
+		}
+	}
+}
+
+func TestExecInfraError(t *testing.T) {
+	sink := &fakeSink{}
+	infraErr := errors.New("engine down")
+	engine := &isolation.StubEngine{
+		ExecFunc: func(ctx context.Context, sandboxID, command string) (isolation.ExecResult, error) {
+			return isolation.ExecResult{}, infraErr
+		},
+	}
+	svc := New(registry.New(), sink, engine)
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("create sandbox: %v", err)
+	}
+
+	run, _, err := svc.Exec(context.Background(), sb.ID, "anything")
+
+	if !errors.Is(err, infraErr) {
+		t.Fatalf("exec err = %v, want the infra error surfaced (→ 500)", err)
+	}
+	if run.Status != domain.RunFailed {
+		t.Errorf("run status = %q, want %q", run.Status, domain.RunFailed)
+	}
+	if sb.Status != domain.SandboxError {
+		t.Errorf("sandbox status = %q, want %q — the runtime under it is broken", sb.Status, domain.SandboxError)
+	}
+	want := []string{
+		"sandbox.created", "sandbox.ready",
+		"sandbox.active", "sandbox.error",
+		"run.created", "run.preparing", "run.running", "run.failed",
+	}
+	if len(sink.events) != len(want) {
+		t.Fatalf("recorded %d events, want %d", len(sink.events), len(want))
+	}
+	for i, name := range want {
+		if sink.events[i].Name != name {
+			t.Errorf("event %d = %q, want %q", i, sink.events[i].Name, name)
+		}
+	}
+}
+
+func TestExecBusySandbox(t *testing.T) {
+	sink := &fakeSink{}
+	engine := &isolation.StubEngine{}
+	svc := New(registry.New(), sink, engine)
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("create sandbox: %v", err)
+	}
+	// Force the sandbox ACTIVE. At Tier 0 exec is synchronous, so the only
+	// way to meet Exec with an alteady-claimed sandbox is to claim it first.
+	if err := sb.MarkActive(); err != nil {
+		t.Fatalf("setup MarkActive: %v", err)
+	}
+	run, _, err := svc.Exec(context.Background(), sb.ID, "anything")
+	if err == nil {
+		t.Fatalf("exec on a busy sandbox: err = nil, want a rejection")
+	}
+	if run != nil {
+		t.Errorf("run = %v, want nil — nothing is minted past a failed claim", run)
+	}
+	// The rejection is recorded — Option A evidence hygiene. The status it
+	// maps to (409) is ADR-018 and is deliberately not asserted here.
+	last := sink.events[len(sink.events)-1]
+	if last.Name != "sandbox.active_rejected" {
+		t.Errorf("last event = %q, want sandbox.active_rejected", last.Name)
+	}
+	if sb.Status != domain.SandboxActive {
+		t.Errorf("sandbox status = %q, want %q — a rejected claim doesn't move it", sb.Status, domain.SandboxActive)
+	}
+}
