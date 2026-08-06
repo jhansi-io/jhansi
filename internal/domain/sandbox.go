@@ -1,11 +1,17 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
 
 //SandboxStatus is the lifecycle state of a sandbox.
+
+// ErrSandboxBusy signals a claim rejected because the sandbox is already
+// ACTIVE — a live run holds it. It is the only claim rejection that maps to
+// 409; every other from-state stays a generic domain error. See ADR-018.
+var ErrSandboxBusy = errors.New("sandbox busy: a run is already active")
 
 type SandboxStatus string
 
@@ -65,6 +71,9 @@ func (s *Sandbox) MarkActive() error {
 			From: s.Status,
 			To:   SandboxActive,
 		})
+		if s.Status == SandboxActive {
+			return fmt.Errorf("sandbox %s: already active: %w", s.ID, ErrSandboxBusy)
+		}
 		return fmt.Errorf("sandbox %s: cannot mark active from %s", s.ID, s.Status)
 	}
 	s.Status = SandboxActive

@@ -259,3 +259,32 @@ func TestExecNonZeroExitIs200(t *testing.T) {
 		t.Errorf("exit_code = %d, want 1", resp.ExitCode)
 	}
 }
+
+func TestExecBusySandboxIs409(t *testing.T) {
+	sink, err := evidence.NewFileSink(filepath.Join(t.TempDir(), "events.jsonl"))
+	if err != nil {
+		t.Fatalf("new sink: %v", err)
+	}
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("CreateSandbox: %v", err)
+	}
+	// Claim it first: at Tier 0 exec is synchronous, so the only way to meet
+	// the handler with an already-active sandbox is to claim it by hand.
+	if err := sb.MarkActive(); err != nil {
+		t.Fatalf("setup MarkActive: %v", err)
+	}
+	h := New(svc)
+
+	body := strings.NewReader(`{"command": "echo hello"}`)
+	req := httptest.NewRequest("POST", "/v1/sandboxes/"+sb.ID+"/exec", body)
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+}

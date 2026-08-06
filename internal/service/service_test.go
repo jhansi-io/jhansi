@@ -354,6 +354,11 @@ func TestExecBusySandbox(t *testing.T) {
 		t.Fatalf("setup MarkActive: %v", err)
 	}
 	run, _, err := svc.Exec(context.Background(), sb.ID, "anything")
+
+	if !errors.Is(err, domain.ErrSandboxBusy) {
+		t.Errorf("err = %v, want ErrSandboxBusy", err)
+	}
+
 	if err == nil {
 		t.Fatalf("exec on a busy sandbox: err = nil, want a rejection")
 	}

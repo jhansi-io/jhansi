@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"github.com/jhansi-io/jhansi/internal/domain"
 	"github.com/jhansi-io/jhansi/internal/registry"
 	"github.com/jhansi-io/jhansi/internal/service"
 	"net/http"
@@ -51,7 +52,8 @@ func New(svc *service.ExecutionService) *Handler {
 func (h *Handler) CreateSandbox(w http.ResponseWriter, r *http.Request) {
 	sb, err := h.svc.CreateSandbox()
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		code := statusFor(err)
+		http.Error(w, http.StatusText(code), code)
 		return
 	}
 
@@ -66,11 +68,8 @@ func (h *Handler) CreateSandbox(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetSandbox(w http.ResponseWriter, r *http.Request) {
 	sb, err := h.svc.GetSandbox(r.PathValue("id"))
 	if err != nil {
-		if errors.Is(err, registry.ErrNotFound) {
-			http.Error(w, "sandbox not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		code := statusFor(err)
+		http.Error(w, http.StatusText(code), code)
 		return
 	}
 	resp := sandboxResponse{ID: sb.ID, Status: string(sb.Status)}
@@ -99,11 +98,8 @@ func (h *Handler) ListSandboxes(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteSandbox(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.DeleteSandbox(r.PathValue("id"))
 	if err != nil {
-		if errors.Is(err, registry.ErrNotFound) {
-			http.Error(w, "sandbox not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		code := statusFor(err)
+		http.Error(w, http.StatusText(code), code)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -121,11 +117,8 @@ func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
 	}
 	run, result, err := h.svc.Exec(r.Context(), r.PathValue("id"), req.Command)
 	if err != nil {
-		if errors.Is(err, registry.ErrNotFound) {
-			http.Error(w, "sandbox not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		code := statusFor(err)
+		http.Error(w, http.StatusText(code), code)
 		return
 	}
 	resp := execResponse{
@@ -150,4 +143,18 @@ func (h *Handler) Routes() *http.ServeMux {
 	mux.HandleFunc("DELETE /v1/sandboxes/{id}", h.DeleteSandbox)
 	mux.HandleFunc("POST /v1/sandboxes/{id}/exec", h.Exec)
 	return mux
+}
+
+// statusFor maps a service error to an HTTP status. Unknown id → 404,
+// busy sandbox → 409, anything unclassified → 500 (deny-by-default: an
+// unmapped error is a server fault until proven otherwise). See ADR-018.
+func statusFor(err error) int {
+	switch {
+	case errors.Is(err, registry.ErrNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, domain.ErrSandboxBusy):
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
 }
