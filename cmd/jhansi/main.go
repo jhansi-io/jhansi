@@ -27,7 +27,7 @@ func newServer(addr, dataDir string) (*http.Server, error) {
 		return nil, fmt.Errorf("open event sink: %w", err)
 	}
 
-	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{}, dataDir)
 	return &http.Server{
 		Addr:              addr,
 		Handler:           httpapi.New(svc).Routes(),

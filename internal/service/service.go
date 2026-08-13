@@ -7,6 +7,7 @@ import (
 	"github.com/jhansi-io/jhansi/internal/id"
 	"github.com/jhansi-io/jhansi/internal/isolation"
 	"github.com/jhansi-io/jhansi/internal/registry"
+	"os"
 )
 
 type eventSource interface {
@@ -20,11 +21,17 @@ type ExecutionService struct {
 	reg    *registry.Registry
 	sink   evidence.Sink
 	engine isolation.SandboxEngine
+	// dataDir is the root under which sandbox working directories live.
+	dataDir string
 }
 
 // New constructs an ExecutionService over a registry and sink.
-func New(reg *registry.Registry, sink evidence.Sink, engine isolation.SandboxEngine) *ExecutionService {
-	return &ExecutionService{reg: reg, sink: sink, engine: engine}
+func New(reg *registry.Registry, sink evidence.Sink, engine isolation.SandboxEngine, dataDir string) *ExecutionService {
+	return &ExecutionService{
+		reg:     reg,
+		sink:    sink,
+		engine:  engine,
+		dataDir: dataDir}
 }
 
 // CreateSandbox mints an id, constructs a sandbox, stores it, and
@@ -39,6 +46,11 @@ func (s *ExecutionService) CreateSandbox() (*domain.Sandbox, error) {
 	}
 
 	sb := domain.NewSandbox(sbID)
+
+	if err := os.MkdirAll(workDirFor(s.dataDir, sbID), 0o700); err != nil {
+		return nil, err
+	}
+
 	if err := sb.MarkReady(); err != nil {
 		return nil, err
 	}
@@ -123,6 +135,10 @@ func (s *ExecutionService) DeleteSandbox(id string) error {
 		return err
 	}
 	markErr := sb.MarkDeleted()
+
+	if err := os.RemoveAll(workDirFor(s.dataDir, id)); err != nil {
+		sb.RecordWorkDirRemovalFailed(err.Error())
+	}
 	if err := s.drainAndRecord(sb); err != nil {
 		return err
 	}

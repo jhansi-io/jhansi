@@ -6,6 +6,8 @@ import (
 	"github.com/jhansi-io/jhansi/internal/domain"
 	"github.com/jhansi-io/jhansi/internal/isolation"
 	"github.com/jhansi-io/jhansi/internal/registry"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -28,7 +30,7 @@ func (f *fakeSink) Record(events []domain.Event) error {
 func TestCreateSandbox(t *testing.T) {
 	sink := &fakeSink{}
 
-	svc := New(registry.New(), sink, &isolation.StubEngine{})
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -67,7 +69,7 @@ func TestCreateSandbox(t *testing.T) {
 
 func TestCreateSandboxFailure(t *testing.T) {
 	sinkErr := errors.New("sink down")
-	svc := New(registry.New(), &fakeSink{err: sinkErr}, &isolation.StubEngine{})
+	svc := New(registry.New(), &fakeSink{err: sinkErr}, &isolation.StubEngine{}, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if !errors.Is(err, sinkErr) {
@@ -80,7 +82,7 @@ func TestCreateSandboxFailure(t *testing.T) {
 
 func TestDeleteSandbox(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{})
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -114,7 +116,7 @@ func TestDeleteSandbox(t *testing.T) {
 
 func TestDeleteSandboxIdempotent(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{})
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -150,7 +152,7 @@ func TestDeleteSandboxIdempotent(t *testing.T) {
 }
 
 func TestDeleteSandboxNotFound(t *testing.T) {
-	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{})
+	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{}, t.TempDir())
 	err := svc.DeleteSandbox("sb_missing")
 	if !errors.Is(err, registry.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
@@ -159,7 +161,7 @@ func TestDeleteSandboxNotFound(t *testing.T) {
 
 func TestDeleteSandboxRecordFailure(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{})
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -176,7 +178,7 @@ func TestDeleteSandboxRecordFailure(t *testing.T) {
 
 func TestExecHappyPath(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{})
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -224,7 +226,7 @@ func TestExecNonZeroExit(t *testing.T) {
 			return isolation.ExecResult{ExitCode: 1, Stderr: "boom"}, nil
 		},
 	}
-	svc := New(registry.New(), sink, engine)
+	svc := New(registry.New(), sink, engine, t.TempDir())
 	sb, err := svc.CreateSandbox()
 	if err != nil {
 		t.Fatalf("create sandbox: %v", err)
@@ -266,7 +268,7 @@ func TestExecTimedOut(t *testing.T) {
 			return isolation.ExecResult{TimedOut: true}, nil
 		},
 	}
-	svc := New(registry.New(), sink, engine)
+	svc := New(registry.New(), sink, engine, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -306,7 +308,7 @@ func TestExecInfraError(t *testing.T) {
 			return isolation.ExecResult{}, infraErr
 		},
 	}
-	svc := New(registry.New(), sink, engine)
+	svc := New(registry.New(), sink, engine, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -342,7 +344,7 @@ func TestExecInfraError(t *testing.T) {
 func TestExecBusySandbox(t *testing.T) {
 	sink := &fakeSink{}
 	engine := &isolation.StubEngine{}
-	svc := New(registry.New(), sink, engine)
+	svc := New(registry.New(), sink, engine, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -373,5 +375,118 @@ func TestExecBusySandbox(t *testing.T) {
 	}
 	if sb.Status != domain.SandboxActive {
 		t.Errorf("sandbox status = %q, want %q — a rejected claim doesn't move it", sb.Status, domain.SandboxActive)
+	}
+}
+
+// TestCreateSandboxMakesWorkDir checks that a created sandbox has its
+// working directory on a disk at the derived path (ADR-019): registry
+// membership implies the directory exists.
+
+func TestCreateSandboxMakesWorkDir(t *testing.T) {
+	dataDir := t.TempDir()
+	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{}, dataDir)
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("create sandbox: %v", err)
+	}
+	info, err := os.Stat(workDirFor(dataDir, sb.ID))
+	if err != nil {
+		t.Fatalf("stat work dir: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("work dir is not a directory")
+	}
+	if perm := info.Mode().Perm(); perm != 0o700 {
+		t.Errorf("work dir mode = %o, want 700", perm)
+	}
+}
+
+// TestDeleteSandboxRemovesWorkDir checks that destroying a sandbox
+// removes its working directory (ADR-019). Create and destroy are
+// symmetric: the directory's lifetime is the sandbox's.
+func TestDeleteSandboxRemovesWorkDir(t *testing.T) {
+	dataDir := t.TempDir()
+	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{}, dataDir)
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("create sandbox: %v", err)
+	}
+
+	if err := svc.DeleteSandbox(sb.ID); err != nil {
+		t.Fatalf("delete sandbox: %v", err)
+	}
+
+	if _, err := os.Stat(workDirFor(dataDir, sb.ID)); !os.IsNotExist(err) {
+		t.Errorf("work dir still present, stat err = %v", err)
+	}
+}
+
+// TestDeleteSandboxWorkDirRemovalFails checks decision 5 of ADR-019: a
+// directory that cannot be removed does not change the outcome. The
+// sandbox still reaches DELETED and DeleteSandbox still returns nil;
+// the orphaned bytes are recorded as an engine failure instead.
+func TestDeleteSandboxWorkDirRemovalFails(t *testing.T) {
+	dataDir := t.TempDir()
+	sink := &fakeSink{}
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, dataDir)
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("create sandbox: %v", err)
+	}
+
+	parent := filepath.Dir(workDirFor(dataDir, sb.ID))
+	if err := os.Chmod(parent, 0o500); err != nil {
+		t.Fatalf("chmod parent: %v", err)
+	}
+
+	t.Cleanup(func() { os.Chmod(parent, 0o700) })
+
+	if err := svc.DeleteSandbox(sb.ID); err != nil {
+		t.Fatalf("delete sandbox: %v", err)
+	}
+	if sb.Status != domain.SandboxDeleted {
+		t.Errorf("status = %s, want DELETED", sb.Status)
+	}
+	// Recorded: the failure is the last event, after sandbox.deleted.
+	if n := len(sink.events); n < 2 ||
+		sink.events[n-2].Name != "sandbox.deleted" ||
+		sink.events[n-1].Name != "sandbox.workdir_removal_failed" {
+		t.Fatalf("last events = %v, want sandbox.deleted then sandbox.workdir_removal_failed", sink.events)
+	}
+
+	payload, ok := sink.events[len(sink.events)-1].Payload.(domain.SandboxWorkDirRemovalFailed)
+	if !ok {
+		t.Fatalf("payload type = %T, want SandboxWorkDirRemovalFailed", sink.events[len(sink.events)-1].Payload)
+	}
+	if payload.Reason == "" {
+		t.Error("payload reason is empty")
+	}
+}
+
+// TestCreateSandboxWorkDirFails checks that a sandbox which cannot be
+// provisioned never enters the registry (ADR-019). The invariant is
+// one-directional: registry membership implies a directory exists.
+func TestCreateSandboxWorkDirFails(t *testing.T) {
+	dataDir := t.TempDir()
+	sink := &fakeSink{}
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, dataDir)
+
+	sandboxes := filepath.Join(dataDir, "sandboxes")
+	if err := os.MkdirAll(sandboxes, 0o500); err != nil {
+		t.Fatalf("mkdir sandboxes: %v", err)
+	}
+	t.Cleanup(func() { os.Chmod(sandboxes, 0o700) })
+
+	if _, err := svc.CreateSandbox(); err == nil {
+		t.Fatal("create sandbox error = nil, want failure")
+	}
+	if got := svc.reg.List(); len(got) != 0 {
+		t.Errorf("registry holds %d sandboxes, want 0", len(got))
+	}
+	if len(sink.events) != 0 {
+		t.Errorf("recorded %d events, want 0", len(sink.events))
 	}
 }

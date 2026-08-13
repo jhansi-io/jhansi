@@ -19,7 +19,7 @@ func TestCreateSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}))
+	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir()))
 	req := httptest.NewRequest("POST", "/v1/sandboxes", nil)
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
@@ -44,7 +44,7 @@ func TestGetSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 	sb, err := svc.CreateSandbox()
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -72,7 +72,7 @@ func TestSandboxNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}))
+	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir()))
 	req := httptest.NewRequest("GET", "/v1/sandboxes/sb_missing", nil)
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
@@ -87,7 +87,7 @@ func TestListSandboxesEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}))
+	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir()))
 
 	req := httptest.NewRequest("GET", "/v1/sandboxes", nil)
 	rec := httptest.NewRecorder()
@@ -107,7 +107,7 @@ func TestListSandboxes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 	a, err := svc.CreateSandbox()
 	if err != nil {
 		t.Fatalf("seed a: %v", err)
@@ -143,7 +143,7 @@ func TestDeleteSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 	sb, err := svc.CreateSandbox()
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -167,7 +167,7 @@ func TestDeleteSandboxNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}))
+	h := New(service.New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir()))
 
 	req := httptest.NewRequest("DELETE", "/v1/sandboxes/sb_missing", nil)
 	rec := httptest.NewRecorder()
@@ -183,7 +183,7 @@ func TestExec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -229,7 +229,7 @@ func TestExecNonZeroExitIs200(t *testing.T) {
 			return isolation.ExecResult{ExitCode: 1, Stderr: "boom"}, nil
 		},
 	}
-	svc := service.New(registry.New(), sink, engine)
+	svc := service.New(registry.New(), sink, engine, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -265,7 +265,7 @@ func TestExecBusySandboxIs409(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	svc := service.New(registry.New(), sink, &isolation.StubEngine{})
+	svc := service.New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {

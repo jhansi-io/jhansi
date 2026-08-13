@@ -29,6 +29,13 @@ type SandboxTransitionRejected struct {
 	To   SandboxStatus
 }
 
+// SandboxWorkDirRemovalFailed is the payload of
+// sand.workdir_removal_failed. Reason is the error text. The path is
+// not carried. it is derived from the sandbox id, not domain state.
+type SandboxWorkDirRemovalFailed struct {
+	Reason string
+}
+
 type Sandbox struct {
 	ID        string
 	Status    SandboxStatus
@@ -142,4 +149,14 @@ func (s *Sandbox) MarkError() error {
 		})
 		return fmt.Errorf("sandbox %s: cannot error from %s", s.ID, s.Status)
 	}
+}
+
+// RecordWorkDirRemovalFailed records that the sandbox's working directory
+// could not be removed. It is not a transition: the sandbox is already
+// DELETED and stays so (ADR-019). Orphaned bytes are an engine failure,
+// and silence about them is the one unacceptable outcome.
+func (s *Sandbox) RecordWorkDirRemovalFailed(reason string) {
+	s.recordWith("sandbox.workdir_removal_failed", time.Now().UTC(), SandboxWorkDirRemovalFailed{
+		Reason: reason,
+	})
 }
