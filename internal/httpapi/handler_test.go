@@ -225,7 +225,7 @@ func TestExecNonZeroExitIs200(t *testing.T) {
 		t.Fatalf("new sink: %v", err)
 	}
 	engine := &isolation.StubEngine{
-		ExecFunc: func(ctx context.Context, sandboxID, command string) (isolation.ExecResult, error) {
+		ExecFunc: func(ctx context.Context, req isolation.ExecRequest) (isolation.ExecResult, error) {
 			return isolation.ExecResult{ExitCode: 1, Stderr: "boom"}, nil
 		},
 	}

@@ -222,7 +222,7 @@ func TestExecHappyPath(t *testing.T) {
 func TestExecNonZeroExit(t *testing.T) {
 	sink := &fakeSink{}
 	engine := &isolation.StubEngine{
-		ExecFunc: func(ctx context.Context, sandboxID, command string) (isolation.ExecResult, error) {
+		ExecFunc: func(ctx context.Context, req isolation.ExecRequest) (isolation.ExecResult, error) {
 			return isolation.ExecResult{ExitCode: 1, Stderr: "boom"}, nil
 		},
 	}
@@ -264,7 +264,7 @@ func TestExecNonZeroExit(t *testing.T) {
 func TestExecTimedOut(t *testing.T) {
 	sink := &fakeSink{}
 	engine := &isolation.StubEngine{
-		ExecFunc: func(ctx context.Context, sandboxID, command string) (isolation.ExecResult, error) {
+		ExecFunc: func(ctx context.Context, req isolation.ExecRequest) (isolation.ExecResult, error) {
 			return isolation.ExecResult{TimedOut: true}, nil
 		},
 	}
@@ -304,7 +304,7 @@ func TestExecInfraError(t *testing.T) {
 	sink := &fakeSink{}
 	infraErr := errors.New("engine down")
 	engine := &isolation.StubEngine{
-		ExecFunc: func(ctx context.Context, sandboxID, command string) (isolation.ExecResult, error) {
+		ExecFunc: func(ctx context.Context, req isolation.ExecRequest) (isolation.ExecResult, error) {
 			return isolation.ExecResult{}, infraErr
 		},
 	}

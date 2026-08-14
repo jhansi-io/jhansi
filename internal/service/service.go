@@ -100,7 +100,11 @@ func (s *ExecutionService) Exec(ctx context.Context, sandboxID, command string) 
 	if err := run.MarkRunning(); err != nil {
 		panic(err) // unreachable: MarkPreparing left it PREPARING, MarkRunning is legal from PREPARING
 	}
-	result, err := s.engine.Exec(ctx, sandboxID, command)
+	result, err := s.engine.Exec(ctx, isolation.ExecRequest{
+		SandboxID: sandboxID,
+		WorkDir:   workDirFor(s.dataDir, sandboxID),
+		Command:   command,
+	})
 
 	switch {
 	case err != nil:

@@ -9,12 +9,12 @@ var _ SandboxEngine = (*StubEngine)(nil)
 // Set ExecFunc to drive any other outcome — non-zero exit, TimedOut, or an
 // infra error — so tests exercise the full failure surface.
 type StubEngine struct {
-	ExecFunc func(ctx context.Context, sandboxID, command string) (ExecResult, error)
+	ExecFunc func(ctx context.Context, req ExecRequest) (ExecResult, error)
 }
 
-func (e *StubEngine) Exec(ctx context.Context, sandboxID, command string) (ExecResult, error) {
+func (e *StubEngine) Exec(ctx context.Context, req ExecRequest) (ExecResult, error) {
 	if e.ExecFunc != nil {
-		return e.ExecFunc(ctx, sandboxID, command)
+		return e.ExecFunc(ctx, req)
 	}
-	return ExecResult{ExitCode: 0, Stdout: command}, nil
+	return ExecResult{ExitCode: 0, Stdout: req.Command}, nil
 }
