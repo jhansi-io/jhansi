@@ -13,6 +13,8 @@ import (
 	"strconv"
 )
 
+var _ SandboxEngine = (*DockerEngine)(nil)
+
 // dockerAPIVersion pins the Docker API version jhansi requests.
 //
 // The daemon serves older versions than its own, so pinning keeps jhansi's
@@ -106,6 +108,40 @@ func newSocketClient(socketPath string) *http.Client {
 			},
 		},
 	}
+}
+
+// Exec runs one command in a fresh container over the sandbox's working
+// directory, then removes the container. The command is handed to a shell,
+// so shell syntax work and the image must contain /bin/sh.
+func (e *DockerEngine) Exec(ctx context.Context, req ExecRequest) (ExecResult, error) {
+	cmd := []string{"sh", "-c", req.Command}
+
+	id, err := e.createContainer(ctx, "", req.WorkDir, cmd)
+	if err != nil {
+		return ExecResult{}, err
+	}
+	defer e.removeContainer(context.WithoutCancel(ctx), id)
+
+	if err := e.startContainer(ctx, id); err != nil {
+		return ExecResult{}, err
+	}
+
+	code, err := e.waitContainer(ctx, id)
+	if err != nil {
+		return ExecResult{}, err
+	}
+
+	raw, err := e.fetchLogs(ctx, id)
+	if err != nil {
+		return ExecResult{}, err
+	}
+
+	stdout, stderr := demuxLogs(raw)
+	return ExecResult{
+		ExitCode: code,
+		Stdout:   string(stdout),
+		Stderr:   string(stderr),
+	}, nil
 }
 
 // createContainer creates a container for one exec and returns its ID.
@@ -219,7 +255,7 @@ func (e *DockerEngine) waitContainer(ctx context.Context, id string) (int, error
 func (e *DockerEngine) fetchLogs(ctx context.Context, id string) ([]byte, error) {
 	url := e.apiURL("/containers/" + id + "/logs?stdout=1&stderr=1")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build logs request: %w", err)
 	}
@@ -231,7 +267,7 @@ func (e *DockerEngine) fetchLogs(ctx context.Context, id string) ([]byte, error)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch logs: docker returned %s", err)
+		return nil, fmt.Errorf("fetch logs: docker returned %s", resp.Status)
 	}
 
 	raw, err := io.ReadAll(resp.Body)

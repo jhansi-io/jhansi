@@ -17,7 +17,11 @@ import (
 // newServer wires the engine and returns a configured *http.Server without
 // starting it. Construction is separated from listening so tests can drive
 // the real handler — and the real FileSink — without binding a port.
-func newServer(addr, dataDir string) (*http.Server, error) {
+func newServer(addr, dataDir string, engine isolation.SandboxEngine) (*http.Server, error) {
+	dataDir, err := filepath.Abs(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve data dir: %w", err)
+	}
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
@@ -27,7 +31,7 @@ func newServer(addr, dataDir string) (*http.Server, error) {
 		return nil, fmt.Errorf("open event sink: %w", err)
 	}
 
-	svc := service.New(registry.New(), sink, &isolation.StubEngine{}, dataDir)
+	svc := service.New(registry.New(), sink, engine, dataDir)
 	return &http.Server{
 		Addr:              addr,
 		Handler:           httpapi.New(svc).Routes(),
@@ -43,12 +47,14 @@ func runServer(args []string) error {
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
 	addr := fs.String("addr", ":8080", "address to listen on")
 	dataDir := fs.String("data-dir", "./jhansi-data", "directory for evidence and run data")
+	socket := fs.String("docker-socket", "/var/run/docker.sock", "path to the Docker daemon socket")
+	image := fs.String("default-image", "python:3.12-slim", "image used when a sandbox does not specify one")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	srv, err := newServer(*addr, *dataDir)
+	srv, err := newServer(*addr, *dataDir, isolation.NewDockerEngine(*socket, *image))
 	if err != nil {
 		return err
 	}
