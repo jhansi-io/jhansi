@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"github.com/jhansi-io/jhansi/internal/isolation"
 )
 
 // TestNewServerCreatesDataDir asserts construction is self-sufficient: it
@@ -16,7 +17,7 @@ import (
 func TestNewServerCreatesDataDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 
-	if _, err := newServer(":0", dir); err != nil {
+	if _, err := newServer(Config{Addr: ":0", DataDir: dir}, &isolation.StubEngine{}); err != nil {
 		t.Fatalf("newServer: %v", err)
 	}
 
@@ -39,7 +40,7 @@ func TestNewServerCreatesDataDir(t *testing.T) {
 // spine survives the wiring.
 func TestServerEndToEnd(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
-	srv, err := newServer("0:", dir)
+	srv, err := newServer(Config{Addr: ":0", DataDir: dir}, &isolation.StubEngine{})
 	if err != nil {
 		t.Fatalf("newServer: %v", err)
 	}

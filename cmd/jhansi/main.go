@@ -14,11 +14,25 @@ import (
 	"time"
 )
 
+// Config holds the settings supplied at bootstrap. The fields mirror the
+// server subcommand's flag. Grouping them keeps newServer's signature
+// stable as later work adds defaults, and makes each value named at the
+// call site rather than positional.
+type Config struct {
+	// Addr is the TCP address the HTTP server listens on.
+	Addr string
+
+	// DataDir is the directory under which evidence and sandbox
+	// working directories are created. Resolved to an absolute path
+	// by newServer.
+	DataDir string
+}
+
 // newServer wires the engine and returns a configured *http.Server without
 // starting it. Construction is separated from listening so tests can drive
 // the real handler — and the real FileSink — without binding a port.
-func newServer(addr, dataDir string, engine isolation.SandboxEngine) (*http.Server, error) {
-	dataDir, err := filepath.Abs(dataDir)
+func newServer(cfg Config, engine isolation.SandboxEngine) (*http.Server, error) {
+	dataDir, err := filepath.Abs(cfg.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve data dir: %w", err)
 	}
@@ -33,7 +47,7 @@ func newServer(addr, dataDir string, engine isolation.SandboxEngine) (*http.Serv
 
 	svc := service.New(registry.New(), sink, engine, dataDir)
 	return &http.Server{
-		Addr:              addr,
+		Addr:              cfg.Addr,
 		Handler:           httpapi.New(svc).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -53,8 +67,11 @@ func runServer(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-
-	srv, err := newServer(*addr, *dataDir, isolation.NewDockerEngine(*socket, *image))
+	cfg := Config{
+		Addr:    *addr,
+		DataDir: *dataDir,
+	}
+	srv, err := newServer(cfg, isolation.NewDockerEngine(*socket, *image))
 	if err != nil {
 		return err
 	}
