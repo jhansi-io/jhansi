@@ -26,6 +26,12 @@ type Config struct {
 	// working directories are created. Resolved to an absolute path
 	// by newServer.
 	DataDir string
+
+	// ExecTimeout bounds how long a single command may run.
+	ExecTimeout time.Duration
+
+	// MaxOutputBytes bounds how much of each stream is retained.
+	MaxOutputBytes int64
 }
 
 // newServer wires the engine and returns a configured *http.Server without
@@ -45,7 +51,11 @@ func newServer(cfg Config, engine isolation.SandboxEngine) (*http.Server, error)
 		return nil, fmt.Errorf("open event sink: %w", err)
 	}
 
-	svc := service.New(registry.New(), sink, engine, dataDir)
+	svc := service.New(registry.New(), sink, engine, service.Config{
+		DataDir:        dataDir,
+		ExecTimeout:    cfg.ExecTimeout,
+		MaxOutputBytes: cfg.MaxOutputBytes,
+	})
 	return &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           httpapi.New(svc).Routes(),
@@ -63,13 +73,17 @@ func runServer(args []string) error {
 	dataDir := fs.String("data-dir", "./jhansi-data", "directory for evidence and run data")
 	socket := fs.String("docker-socket", "/var/run/docker.sock", "path to the Docker daemon socket")
 	image := fs.String("default-image", "python:3.12-slim", "image used when a sandbox does not specify one")
+	execTimeout := fs.Duration("exec-timeout", 5*time.Minute, "maximum duration of a single command")
+	maxOutput := fs.Int64("max-output-bytes", 1<<20, "maximum output retained per stream")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	cfg := Config{
-		Addr:    *addr,
-		DataDir: *dataDir,
+		Addr:           *addr,
+		DataDir:        *dataDir,
+		ExecTimeout:    *execTimeout,
+		MaxOutputBytes: *maxOutput,
 	}
 	srv, err := newServer(cfg, isolation.NewDockerEngine(*socket, *image))
 	if err != nil {

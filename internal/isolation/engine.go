@@ -2,6 +2,7 @@ package isolation
 
 import (
 	"context"
+	"time"
 )
 
 // ExecRequest is one command to run in a sandbox.
@@ -12,6 +13,12 @@ type ExecRequest struct {
 	SandboxID string
 	WorkDir   string
 	Command   string
+	// Timeout bounds how long the command may run. The service fills it on
+	// every request; the engine applies it rather than holding a default.
+	Timeout time.Duration
+	// MaxOutputBytes bounds how much of each stream jhansi retains. The tail
+	// is kept, because a failing command explains itself at the end.
+	MaxOutputBytes int64
 }
 
 // ExecResult is the outcome of running in a sandbox.
@@ -22,6 +29,10 @@ type ExecResult struct {
 	Stdout   string
 	Stderr   string
 	TimedOut bool
+	// OutputTruncated reports that captured output was bounded and earlier
+	// bytes were discarded. It describes jhansi's capture, not the command's
+	// own outcome — the command wrote more than this.
+	OutputTruncated bool
 }
 
 // SandboxEngine runs commands in an opaque isolation backend.

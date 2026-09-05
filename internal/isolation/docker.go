@@ -126,9 +126,19 @@ func (e *DockerEngine) Exec(ctx context.Context, req ExecRequest) (ExecResult, e
 		return ExecResult{}, err
 	}
 
-	code, err := e.waitContainer(ctx, id)
+	waitCtx, cancel := context.WithTimeout(ctx, req.Timeout)
+	defer cancel()
+	timedOut := false
+
+	code, err := e.waitContainer(waitCtx, id)
 	if err != nil {
-		return ExecResult{}, err
+		if waitCtx.Err() != context.DeadlineExceeded {
+			return ExecResult{}, err
+		}
+		if err := e.killContainer(context.WithoutCancel(ctx), id); err != nil {
+			return ExecResult{}, err
+		}
+		timedOut = true
 	}
 
 	raw, err := e.fetchLogs(ctx, id)
@@ -136,19 +146,20 @@ func (e *DockerEngine) Exec(ctx context.Context, req ExecRequest) (ExecResult, e
 		return ExecResult{}, err
 	}
 
-	stdout, stderr := demuxLogs(raw)
+	stdout, stderr, truncated := demuxLogs(raw, req.MaxOutputBytes)
 	return ExecResult{
-		ExitCode: code,
-		Stdout:   string(stdout),
-		Stderr:   string(stderr),
+		ExitCode:        code,
+		Stdout:          string(stdout),
+		Stderr:          string(stderr),
+		TimedOut:        timedOut,
+		OutputTruncated: truncated,
 	}, nil
 }
 
 // createContainer creates a container for one exec and returns its ID.
 //
 // The container is created but not started. Any non-201 reply is returned as
-// an error carrying Docker's status, which ADR-022 will turn into a
-// distinguishable failure.
+// an error carrying Docker's status.
 func (e *DockerEngine) createContainer(ctx context.Context, image, hostDir string, cmd []string) (string, error) {
 	body, err := json.Marshal(e.createBody(image, hostDir, cmd))
 	if err != nil {
@@ -300,6 +311,36 @@ func (e *DockerEngine) removeContainer(ctx context.Context, id string) error {
 	return nil
 }
 
+// killContainer sends SIGKILL to the process running in the container.
+//
+// The contaiuner is stopped but not removed, so its logs stay readable — a
+// timed-out run's partial output is evidence and must survive the kill.
+// Docker replies 409 when the container has already exited, which is a race
+// between the timeout firing and this call, not a failure.
+func (e *DockerEngine) killContainer(ctx context.Context, id string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.apiURL("/containers/"+id+"/kill"), nil)
+
+	if err != nil {
+		return fmt.Errorf("build kill request: %w", err)
+	}
+
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("kill container: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusConflict {
+		return nil
+	}
+
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("kill container: docker returned %s", resp.Status)
+	}
+	return nil
+
+}
+
 // apiURL builds a Docker API URL for the given path.
 //
 // The host is a placeholder. The client's dialer sends every request to the
@@ -324,13 +365,15 @@ func currentUser() string {
 	return strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
 }
 
-// demuxLogs splits Docker's multiplexed log stream into stdout and stderr.
+// demuxLogs splits Docker's multiplexed log stream into stdout and stderr,
+// retaining at most max bytes of each.
 //
 // Frames are read in order and appended to their stream, so each stream
 // reproduces exactly what the process wrote to it. A truncated final frame is
 // ignored rathet than treated as an error, because partial output is still
-// worth returning.
-func demuxLogs(raw []byte) (stdout, stderr []byte) {
+// worth returning. The bound is applied after demultiplexing: capping the raw
+// stream would cut a frame header in half.
+func demuxLogs(raw []byte, max int64) (stdout, stderr []byte, truncated bool) {
 	for len(raw) >= logHeaderLen {
 		length := int(binary.BigEndian.Uint32(raw[4:logHeaderLen]))
 		if len(raw) < logHeaderLen+length {
@@ -347,5 +390,19 @@ func demuxLogs(raw []byte) (stdout, stderr []byte) {
 
 		raw = raw[logHeaderLen+length:]
 	}
-	return stdout, stderr
+	stdout, outCut := keepTail(stdout, max)
+	stderr, errCut := keepTail(stderr, max)
+	return stdout, stderr, outCut || errCut
+}
+
+// keepTail returns the last max bytes of b, and whether anything was dropped.
+//
+// The tail is kept rather than the head because a failing command explains
+// itself at the end: a build that emits pages of output and then dies on one
+// error must not have that error discarded.
+func keepTail(b []byte, max int64) ([]byte, bool) {
+	if max <= 0 || int64(len(b)) <= max {
+		return b, false
+	}
+	return b[int64(len(b))-max:], true
 }

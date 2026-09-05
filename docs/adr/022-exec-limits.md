@@ -140,6 +140,13 @@ at all today. When it lands, truncation is a fact it must include, and the
 payload ADR must state that an output hash commits to what jhansi captured,
 not to what the command wrote.
 
+The cap bounds retained output, not memory during the read. `demuxLogs`
+accumulates the full stream and trims afterwards, so a command writing
+gigabytes still forces jhansi to hold them before discarding all but the tail.
+The sandbox is protected — its 409-busy window ends — but the process is not.
+Bounding memory properly needs a ring buffer filled as frames arrive, which is
+a change to how logs are read rather than to whatis kept, and is deferred.
+
 `WriteTimeout` becomes settable. ADR-016 left it unset because an exec could
 run without bound; that reason no longer holds. Choosing the value is a
 decision about the HTTP server rather than about limits, and gets its own ADR.
@@ -163,3 +170,8 @@ not values the service passes per exec. Nothing forces them now.
 ceiling on how long a command may run; async is about how its result is
 delivered. Async does not remove the need for this ADR.
 
+**Streaming capture.** Retaining the tail as frames arrive, rather than
+accumulating and trimming, is what actually bounds jhansi's memory.
+`OutputTruncated` and the retained bytes are identical either way, so this is
+an internal change with no contract impact. Blocked on nothing; waiting for a 
+reason.

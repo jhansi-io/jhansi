@@ -8,10 +8,25 @@ import (
 	"github.com/jhansi-io/jhansi/internal/isolation"
 	"github.com/jhansi-io/jhansi/internal/registry"
 	"os"
+	"time"
 )
 
 type eventSource interface {
 	DrainEvents() []domain.Event
+}
+
+// Config holds the services's tunable settings, separate from its
+// collaborators. The defaults here apply to every eexc that does not carry
+// its own (ADR-022).
+type Config struct {
+	// DataDir is the root under which sandbox working directories live.
+	DataDir string
+
+	// ExecTimeout bounds how long a single command may run.
+	ExecTimeout time.Duration
+
+	// MaxOutputBytes bounds how much of each stream is retained.
+	MaxOutputBytes int64
 }
 
 // ExecutionService orchestrates mutating operations: It holds the
@@ -21,17 +36,18 @@ type ExecutionService struct {
 	reg    *registry.Registry
 	sink   evidence.Sink
 	engine isolation.SandboxEngine
-	// dataDir is the root under which sandbox working directories live.
-	dataDir string
+
+	// cfg holds the tunable settings applied to every exec.
+	cfg Config
 }
 
 // New constructs an ExecutionService over a registry and sink.
-func New(reg *registry.Registry, sink evidence.Sink, engine isolation.SandboxEngine, dataDir string) *ExecutionService {
+func New(reg *registry.Registry, sink evidence.Sink, engine isolation.SandboxEngine, cfg Config) *ExecutionService {
 	return &ExecutionService{
-		reg:     reg,
-		sink:    sink,
-		engine:  engine,
-		dataDir: dataDir}
+		reg:    reg,
+		sink:   sink,
+		engine: engine,
+		cfg:    cfg}
 }
 
 // CreateSandbox mints an id, constructs a sandbox, stores it, and
@@ -47,7 +63,7 @@ func (s *ExecutionService) CreateSandbox() (*domain.Sandbox, error) {
 
 	sb := domain.NewSandbox(sbID)
 
-	if err := os.MkdirAll(workDirFor(s.dataDir, sbID), 0o700); err != nil {
+	if err := os.MkdirAll(workDirFor(s.cfg.DataDir, sbID), 0o700); err != nil {
 		return nil, err
 	}
 
@@ -101,9 +117,11 @@ func (s *ExecutionService) Exec(ctx context.Context, sandboxID, command string) 
 		panic(err) // unreachable: MarkPreparing left it PREPARING, MarkRunning is legal from PREPARING
 	}
 	result, err := s.engine.Exec(ctx, isolation.ExecRequest{
-		SandboxID: sandboxID,
-		WorkDir:   workDirFor(s.dataDir, sandboxID),
-		Command:   command,
+		SandboxID:      sandboxID,
+		WorkDir:        workDirFor(s.cfg.DataDir, sandboxID),
+		Command:        command,
+		Timeout:        s.cfg.ExecTimeout,
+		MaxOutputBytes: s.cfg.MaxOutputBytes,
 	})
 
 	switch {
@@ -140,7 +158,7 @@ func (s *ExecutionService) DeleteSandbox(id string) error {
 	}
 	markErr := sb.MarkDeleted()
 
-	if err := os.RemoveAll(workDirFor(s.dataDir, id)); err != nil {
+	if err := os.RemoveAll(workDirFor(s.cfg.DataDir, id)); err != nil {
 		sb.RecordWorkDirRemovalFailed(err.Error())
 	}
 	if err := s.drainAndRecord(sb); err != nil {

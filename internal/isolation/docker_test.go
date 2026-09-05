@@ -13,7 +13,7 @@ func TestDemuxLogs(t *testing.T) {
 	raw = append(raw, logFrame(logStreamStderr, "warning")...)
 	raw = append(raw, logFrame(logStreamStdout, "world")...)
 
-	stdout, stderr := demuxLogs(raw)
+	stdout, stderr, _ := demuxLogs(raw, 0)
 
 	if string(stdout) != "hello world" {
 		t.Errorf("stdout = %q, want %q", stdout, "hello world")
@@ -31,7 +31,7 @@ func TestDemuxLogsTruncated(t *testing.T) {
 	raw = append(raw, logFrame(logStreamStdout, "cut off")...)
 	raw = raw[:len(raw)-3]
 
-	stdout, stderr := demuxLogs(raw)
+	stdout, stderr, _ := demuxLogs(raw, 0)
 
 	if string(stdout) != "complete" {
 		t.Errorf("stdout = %q, want %q", stdout, "complete")

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeSink captures recorded events for assertions and can be told to
@@ -30,7 +31,11 @@ func (f *fakeSink) Record(events []domain.Event) error {
 func TestCreateSandbox(t *testing.T) {
 	sink := &fakeSink{}
 
-	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -69,7 +74,11 @@ func TestCreateSandbox(t *testing.T) {
 
 func TestCreateSandboxFailure(t *testing.T) {
 	sinkErr := errors.New("sink down")
-	svc := New(registry.New(), &fakeSink{err: sinkErr}, &isolation.StubEngine{}, t.TempDir())
+	svc := New(registry.New(), &fakeSink{err: sinkErr}, &isolation.StubEngine{}, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if !errors.Is(err, sinkErr) {
@@ -82,7 +91,11 @@ func TestCreateSandboxFailure(t *testing.T) {
 
 func TestDeleteSandbox(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -116,7 +129,11 @@ func TestDeleteSandbox(t *testing.T) {
 
 func TestDeleteSandboxIdempotent(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -152,7 +169,11 @@ func TestDeleteSandboxIdempotent(t *testing.T) {
 }
 
 func TestDeleteSandboxNotFound(t *testing.T) {
-	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{}, t.TempDir())
+	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{}, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 	err := svc.DeleteSandbox("sb_missing")
 	if !errors.Is(err, registry.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
@@ -161,7 +182,11 @@ func TestDeleteSandboxNotFound(t *testing.T) {
 
 func TestDeleteSandboxRecordFailure(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -178,7 +203,11 @@ func TestDeleteSandboxRecordFailure(t *testing.T) {
 
 func TestExecHappyPath(t *testing.T) {
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{}, t.TempDir())
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -226,7 +255,11 @@ func TestExecNonZeroExit(t *testing.T) {
 			return isolation.ExecResult{ExitCode: 1, Stderr: "boom"}, nil
 		},
 	}
-	svc := New(registry.New(), sink, engine, t.TempDir())
+	svc := New(registry.New(), sink, engine, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 	sb, err := svc.CreateSandbox()
 	if err != nil {
 		t.Fatalf("create sandbox: %v", err)
@@ -268,7 +301,11 @@ func TestExecTimedOut(t *testing.T) {
 			return isolation.ExecResult{TimedOut: true}, nil
 		},
 	}
-	svc := New(registry.New(), sink, engine, t.TempDir())
+	svc := New(registry.New(), sink, engine, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -308,7 +345,11 @@ func TestExecInfraError(t *testing.T) {
 			return isolation.ExecResult{}, infraErr
 		},
 	}
-	svc := New(registry.New(), sink, engine, t.TempDir())
+	svc := New(registry.New(), sink, engine, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -344,7 +385,11 @@ func TestExecInfraError(t *testing.T) {
 func TestExecBusySandbox(t *testing.T) {
 	sink := &fakeSink{}
 	engine := &isolation.StubEngine{}
-	svc := New(registry.New(), sink, engine, t.TempDir())
+	svc := New(registry.New(), sink, engine, Config{
+		DataDir:        t.TempDir(),
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -384,7 +429,11 @@ func TestExecBusySandbox(t *testing.T) {
 
 func TestCreateSandboxMakesWorkDir(t *testing.T) {
 	dataDir := t.TempDir()
-	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{}, dataDir)
+	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{}, Config{
+		DataDir:        dataDir,
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -407,7 +456,11 @@ func TestCreateSandboxMakesWorkDir(t *testing.T) {
 // symmetric: the directory's lifetime is the sandbox's.
 func TestDeleteSandboxRemovesWorkDir(t *testing.T) {
 	dataDir := t.TempDir()
-	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{}, dataDir)
+	svc := New(registry.New(), &fakeSink{}, &isolation.StubEngine{}, Config{
+		DataDir:        dataDir,
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -430,7 +483,11 @@ func TestDeleteSandboxRemovesWorkDir(t *testing.T) {
 func TestDeleteSandboxWorkDirRemovalFails(t *testing.T) {
 	dataDir := t.TempDir()
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{}, dataDir)
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        dataDir,
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sb, err := svc.CreateSandbox()
 	if err != nil {
@@ -470,9 +527,13 @@ func TestDeleteSandboxWorkDirRemovalFails(t *testing.T) {
 // provisioned never enters the registry (ADR-019). The invariant is
 // one-directional: registry membership implies a directory exists.
 func TestCreateSandboxWorkDirFails(t *testing.T) {
-	dataDir := t.TempDir()
 	sink := &fakeSink{}
-	svc := New(registry.New(), sink, &isolation.StubEngine{}, dataDir)
+	dataDir := t.TempDir()
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        dataDir,
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
 
 	sandboxes := filepath.Join(dataDir, "sandboxes")
 	if err := os.MkdirAll(sandboxes, 0o500); err != nil {

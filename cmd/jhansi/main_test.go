@@ -2,13 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/jhansi-io/jhansi/internal/isolation"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"github.com/jhansi-io/jhansi/internal/isolation"
 )
 
 // TestNewServerCreatesDataDir asserts construction is self-sufficient: it
