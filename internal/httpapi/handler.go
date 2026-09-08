@@ -36,13 +36,15 @@ type execRequest struct {
 // engine's ExecResult plus the run id, never from a lookup (ADR-015).
 // Deliberately not isolation.ExecResult: that is the seam's contract, it
 // carries TimedOut which never goes on the wire, and it has never heard
-// of a run.
+// of a run. OutputTruncated does go on the wire — unlike TimedOut, nothing
+// else in the response tells the caller their output was cut (ADR-022).
 type execResponse struct {
-	RunID    string `json:"run_id"`
-	Status   string `json:"status"`
-	ExitCode int    `json:"exit_code"`
-	Stdout   string `json:"stdout"`
-	Stderr   string `json:"stderr"`
+	RunID           string `json:"run_id"`
+	Status          string `json:"status"`
+	ExitCode        int    `json:"exit_code"`
+	Stdout          string `json:"stdout"`
+	Stderr          string `json:"stderr"`
+	OutputTruncated bool   `json:"output_truncated"`
 }
 
 // New constructs a Handler over an ExecutionService
@@ -134,11 +136,12 @@ func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := execResponse{
-		RunID:    run.ID,
-		Status:   string(run.Status),
-		ExitCode: result.ExitCode,
-		Stdout:   result.Stdout,
-		Stderr:   result.Stderr,
+		RunID:           run.ID,
+		Status:          string(run.Status),
+		ExitCode:        result.ExitCode,
+		Stdout:          result.Stdout,
+		Stderr:          result.Stderr,
+		OutputTruncated: result.OutputTruncated,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
