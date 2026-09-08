@@ -214,7 +214,10 @@ func TestExecHappyPath(t *testing.T) {
 		t.Fatalf("create sandbox: %v", err)
 	}
 
-	run, result, err := svc.Exec(context.Background(), sb.ID, "echo hello")
+	run, result, err := svc.Exec(context.Background(), ExecInput{
+		SandboxID: sb.ID,
+		Command:   "echo hi",
+	})
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
@@ -224,7 +227,7 @@ func TestExecHappyPath(t *testing.T) {
 	if result.ExitCode != 0 {
 		t.Errorf("exit code = %d, want 0", result.ExitCode)
 	}
-	if result.Stdout != "echo hello" {
+	if result.Stdout != "echo hi" {
 		t.Errorf("stdout = %q, want the command echoed", result.Stdout)
 	}
 	if sb.Status != domain.SandboxReady {
@@ -265,7 +268,10 @@ func TestExecNonZeroExit(t *testing.T) {
 		t.Fatalf("create sandbox: %v", err)
 	}
 
-	run, result, err := svc.Exec(context.Background(), sb.ID, "false")
+	run, result, err := svc.Exec(context.Background(), ExecInput{
+		SandboxID: sb.ID,
+		Command:   "false",
+	})
 	if err != nil {
 		t.Fatalf("exec: %v — a non-zero exit is a completed run, not an error", err)
 	}
@@ -312,7 +318,10 @@ func TestExecTimedOut(t *testing.T) {
 		t.Fatalf("create sandbox: %v", err)
 	}
 
-	run, _, err := svc.Exec(context.Background(), sb.ID, "sleep 999")
+	run, _, err := svc.Exec(context.Background(), ExecInput{
+		SandboxID: sb.ID,
+		Command:   "sleep 999",
+	})
 	if err != nil {
 		t.Fatalf("exec: %v — a timeout is a completed run, not an error", err)
 	}
@@ -356,7 +365,10 @@ func TestExecInfraError(t *testing.T) {
 		t.Fatalf("create sandbox: %v", err)
 	}
 
-	run, _, err := svc.Exec(context.Background(), sb.ID, "anything")
+	run, _, err := svc.Exec(context.Background(), ExecInput{
+		SandboxID: sb.ID,
+		Command:   "anything",
+	})
 
 	if !errors.Is(err, infraErr) {
 		t.Fatalf("exec err = %v, want the infra error surfaced (→ 500)", err)
@@ -400,7 +412,10 @@ func TestExecBusySandbox(t *testing.T) {
 	if err := sb.MarkActive(); err != nil {
 		t.Fatalf("setup MarkActive: %v", err)
 	}
-	run, _, err := svc.Exec(context.Background(), sb.ID, "anything")
+	run, _, err := svc.Exec(context.Background(), ExecInput{
+		SandboxID: sb.ID,
+		Command:   "anything",
+	})
 
 	if !errors.Is(err, domain.ErrSandboxBusy) {
 		t.Errorf("err = %v, want ErrSandboxBusy", err)

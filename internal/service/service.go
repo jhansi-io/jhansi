@@ -80,10 +80,21 @@ func (s *ExecutionService) CreateSandbox() (*domain.Sandbox, error) {
 	return sb, nil
 }
 
+// ExecInput is what a caller asks for Exec. Timeout is nil when the caller
+// did not supply one, and the service applies its configured default —
+// the default lives here so a later operator ceiling has one place to clamp
+// (ADR-022).
+type ExecInput struct {
+	SandboxID string
+	Command   string
+	Timeout   *time.Duration
+}
+
 // Exec runs a command in a sandbox: claims it, drives a Run through its
 // lifecycle, calls the isolation seam, then releases the sandbox and
-// records both aggregates (ADR-015). Happy path only — a non-zero exit
-// or a timeout is ADR-017.
+// records both aggregates (ADR-015). The switch below maps the engine's
+// result to a terminal state — success, non-zero exit, timeout, or infra
+// fault (ADR-017).
 //
 // The run id is minted before MarkActive deliberately: id.New can fail,
 // and MarkExpired is READY-only, so claiming first would leak a
@@ -91,9 +102,9 @@ func (s *ExecutionService) CreateSandbox() (*domain.Sandbox, error) {
 //
 // The Run is not stored. It is minted, transitioned, drained and dropped -
 // its only durable trace is its events in the sink.
-func (s *ExecutionService) Exec(ctx context.Context, sandboxID, command string) (*domain.Run, isolation.ExecResult, error) {
+func (s *ExecutionService) Exec(ctx context.Context, in ExecInput) (*domain.Run, isolation.ExecResult, error) {
 
-	sb, err := s.reg.Get(sandboxID)
+	sb, err := s.reg.Get(in.SandboxID)
 	if err != nil {
 		return nil, isolation.ExecResult{}, err
 	}
@@ -109,7 +120,7 @@ func (s *ExecutionService) Exec(ctx context.Context, sandboxID, command string) 
 		}
 		return nil, isolation.ExecResult{}, err
 	}
-	run := domain.NewRun(runID, sandboxID)
+	run := domain.NewRun(runID, in.SandboxID)
 	if err := run.MarkPreparing(); err != nil {
 		panic(err) // unreachable: a fresh run is QUEUED, MarkPreparing is legal from QUEUED
 	}
@@ -117,10 +128,10 @@ func (s *ExecutionService) Exec(ctx context.Context, sandboxID, command string) 
 		panic(err) // unreachable: MarkPreparing left it PREPARING, MarkRunning is legal from PREPARING
 	}
 	result, err := s.engine.Exec(ctx, isolation.ExecRequest{
-		SandboxID:      sandboxID,
-		WorkDir:        workDirFor(s.cfg.DataDir, sandboxID),
-		Command:        command,
-		Timeout:        s.cfg.ExecTimeout,
+		SandboxID:      in.SandboxID,
+		WorkDir:        workDirFor(s.cfg.DataDir, in.SandboxID),
+		Command:        in.Command,
+		Timeout:        s.timeoutFor(in.Timeout),
 		MaxOutputBytes: s.cfg.MaxOutputBytes,
 	})
 
@@ -189,4 +200,13 @@ func (s *ExecutionService) ListSandboxes() []*domain.Sandbox {
 func (s *ExecutionService) drainAndRecord(src eventSource) error {
 	events := src.DrainEvents()
 	return s.sink.Record(events)
+}
+
+// timeoutFor resolves a caller's optional timeout against the configured
+// default. Nil means the caller did not ask for one.
+func (s *ExecutionService) timeoutFor(t *time.Duration) time.Duration {
+	if t == nil {
+		return s.cfg.ExecTimeout
+	}
+	return *t
 }

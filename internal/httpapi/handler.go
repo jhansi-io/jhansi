@@ -7,6 +7,7 @@ import (
 	"github.com/jhansi-io/jhansi/internal/registry"
 	"github.com/jhansi-io/jhansi/internal/service"
 	"net/http"
+	"time"
 )
 
 // Handler serves the jhansi HTTP API over an Execution Service.
@@ -21,11 +22,14 @@ type sandboxResponse struct {
 	Status string `json:"status"`
 }
 
-// execRequest is the wire shape for an exec call. One field: the seam
-// takes a bare command string and no language field (ADR-012), and the
-// DTO mirrors it exactly.
+// execRequest is the wire shape for an exec call. Command mirrors the seam,
+// which takes a bare command string and no language field (ADR-012).
+// TimeoutSeconds is a pointer so an absent field is distinguishable from an
+// explicit zero: zero reads as "no limit" to the caller, which is what
+// ADR-022 refuses.
 type execRequest struct {
-	Command string `json:"command"`
+	Command        string `json:"command"`
+	TimeoutSeconds *int   `json:"timeout_seconds"`
 }
 
 // execResponse is the wire shape for an exec result — assembled from the
@@ -115,7 +119,15 @@ func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	run, result, err := h.svc.Exec(r.Context(), r.PathValue("id"), req.Command)
+	if req.TimeoutSeconds != nil && *req.TimeoutSeconds <= 0 {
+		http.Error(w, "timeout_seconds must be positive", http.StatusBadRequest)
+		return
+	}
+	run, result, err := h.svc.Exec(r.Context(), service.ExecInput{
+		SandboxID: r.PathValue("id"),
+		Command:   req.Command,
+		Timeout:   timeoutFrom(req.TimeoutSeconds),
+	})
 	if err != nil {
 		code := statusFor(err)
 		http.Error(w, http.StatusText(code), code)
@@ -157,4 +169,15 @@ func statusFor(err error) int {
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+// timeoutFrom converts an optional wire timeout in seconds to a duration.
+// Nil in means nil out: absence travels to the service, which holds the
+// default (ADR-022).
+func timeoutFrom(seconds *int) *time.Duration {
+	if seconds == nil {
+		return nil
+	}
+	d := time.Duration(*seconds) * time.Second
+	return &d
 }
