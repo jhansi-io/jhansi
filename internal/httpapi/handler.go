@@ -45,6 +45,11 @@ type execResponse struct {
 	Stdout          string `json:"stdout"`
 	Stderr          string `json:"stderr"`
 	OutputTruncated bool   `json:"output_truncated"`
+	// LogsRetained reports whether the run's output was written to its log
+	// directory. False means the run happened but jhansi could not keep a
+	// copy of what it produced (ADR-024).
+	LogsRetained bool   `json:"logs_retained"`
+	LogsError    string `json:"logs_error,omitempty"`
 }
 
 // New constructs a Handler over an ExecutionService
@@ -125,7 +130,7 @@ func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "timeout_seconds must be positive", http.StatusBadRequest)
 		return
 	}
-	run, result, err := h.svc.Exec(r.Context(), service.ExecInput{
+	out, err := h.svc.Exec(r.Context(), service.ExecInput{
 		SandboxID: r.PathValue("id"),
 		Command:   req.Command,
 		Timeout:   timeoutFrom(req.TimeoutSeconds),
@@ -136,12 +141,16 @@ func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := execResponse{
-		RunID:           run.ID,
-		Status:          string(run.Status),
-		ExitCode:        result.ExitCode,
-		Stdout:          result.Stdout,
-		Stderr:          result.Stderr,
-		OutputTruncated: result.OutputTruncated,
+		RunID:           out.Run.ID,
+		Status:          string(out.Run.Status),
+		ExitCode:        out.Result.ExitCode,
+		Stdout:          out.Result.Stdout,
+		Stderr:          out.Result.Stderr,
+		OutputTruncated: out.Result.OutputTruncated,
+	}
+	if out.LogsError != nil {
+		resp.LogsRetained = false
+		resp.LogsError = out.LogsError.Error()
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

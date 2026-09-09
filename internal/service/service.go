@@ -90,6 +90,15 @@ type ExecInput struct {
 	Timeout   *time.Duration
 }
 
+// ExecOutput is what Exec returns. LogsError is set when the run's output
+// could not be written to disk: the command's own outcome stands in Run and
+// Result, and only retention failed (ADR-024).
+type ExecOutput struct {
+	Run       *domain.Run
+	Result    isolation.ExecResult
+	LogsError error
+}
+
 // Exec runs a command in a sandbox: claims it, drives a Run through its
 // lifecycle, calls the isolation seam, then releases the sandbox and
 // records both aggregates (ADR-015). The switch below maps the engine's
@@ -102,23 +111,23 @@ type ExecInput struct {
 //
 // The Run is not stored. It is minted, transitioned, drained and dropped -
 // its only durable trace is its events in the sink.
-func (s *ExecutionService) Exec(ctx context.Context, in ExecInput) (*domain.Run, isolation.ExecResult, error) {
+func (s *ExecutionService) Exec(ctx context.Context, in ExecInput) (ExecOutput, error) {
 
 	sb, err := s.reg.Get(in.SandboxID)
 	if err != nil {
-		return nil, isolation.ExecResult{}, err
+		return ExecOutput{}, err
 	}
 
 	runID, err := id.New("run")
 	if err != nil {
-		return nil, isolation.ExecResult{}, err
+		return ExecOutput{}, err
 	}
 
 	if err := sb.MarkActive(); err != nil {
 		if drainErr := s.drainAndRecord(sb); drainErr != nil {
-			return nil, isolation.ExecResult{}, drainErr
+			return ExecOutput{}, drainErr
 		}
-		return nil, isolation.ExecResult{}, err
+		return ExecOutput{}, err
 	}
 	run := domain.NewRun(runID, in.SandboxID, in.Command)
 	if err := run.MarkPreparing(); err != nil {
@@ -131,12 +140,12 @@ func (s *ExecutionService) Exec(ctx context.Context, in ExecInput) (*domain.Run,
 		sb.MarkIdle()
 		run.MarkPreparationFailed(err.Error())
 		if drainErr := s.drainAndRecord(sb); drainErr != nil {
-			return run, isolation.ExecResult{}, drainErr
+			return ExecOutput{Run: run}, drainErr
 		}
 		if drainErr := s.drainAndRecord(run); drainErr != nil {
-			return run, isolation.ExecResult{}, drainErr
+			return ExecOutput{Run: run}, drainErr
 		}
-		return run, isolation.ExecResult{}, err
+		return ExecOutput{Run: run}, err
 	}
 
 	if err := run.MarkRunning(); err != nil {
@@ -153,6 +162,11 @@ func (s *ExecutionService) Exec(ctx context.Context, in ExecInput) (*domain.Run,
 		MaxOutputBytes: s.cfg.MaxOutputBytes,
 	})
 	elapsed := time.Since(started)
+
+	logsErr := writeRunLogs(s.cfg.DataDir, runID, result.Stdout, result.Stderr)
+	if logsErr != nil {
+		run.RecordLogsWriteFailed(logsErr.Error())
+	}
 
 	switch {
 	case err != nil:
@@ -172,13 +186,15 @@ func (s *ExecutionService) Exec(ctx context.Context, in ExecInput) (*domain.Run,
 		run.MarkSucceeded(runOutcome(result, elapsed, &result.ExitCode))
 	}
 
+	out := ExecOutput{Run: run, Result: result, LogsError: logsErr}
+
 	if drainErr := s.drainAndRecord(sb); drainErr != nil {
-		return run, result, drainErr
+		return out, drainErr
 	}
 	if drainErr := s.drainAndRecord(run); drainErr != nil {
-		return run, result, drainErr
+		return out, drainErr
 	}
-	return run, result, err
+	return out, err
 }
 
 // DeleteSandbox marks a sandbox DELETED and records the transition.

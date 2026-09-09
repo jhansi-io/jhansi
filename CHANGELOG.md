@@ -5,12 +5,15 @@ Internal and behaviour-preserving changes are not.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-09
 
 ### Added
 - Run events in `events.jsonl` now carry the execution itself, not just its timeline. `run.created` records the command as submitted; `run.succeeded`, `run.failed` and `run.timed_out` record the exit code, duration, retained output sizes and SHA-256 hashes, and whether output was truncated. `run.timed_out` also records the timeout applied.
 - Output hashes commit to the bytes jhansi retained, which `output_truncated` reports may be fewer than the command wrote.
 - A run that was killed on timeout or never started records no exit code, rather than zero.
+- Run output is now kept on disk. Each run's retained stdout and stderr are written to `<data-dir>/runs/<run_id>/`, byte for byte the content the run's event hashes commit to. `runs/` sits outside `sandboxes/`, so deleting a sandbox does not remove its runs' output.
+- An exec is refused if jhansi cannot create the run's log directory — a full disk, a read-only data directory, or wrong permissions. Nothing runs, and the run is recorded as `FAILED` with `run.preparation_failed` and the reason. A refused run has no `run.running` event.
+- `logs_retained` on the exec response reports whether the run's output was kept. When it is false, `logs_error` gives the reason and `run.logs_write_failed` records it: the command's own outcome is unaffected.
 
 ## [0.2.0] - 2026-09-08
 

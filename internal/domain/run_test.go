@@ -348,3 +348,36 @@ func TestMarkPreparationFailedFromRunning(t *testing.T) {
 		t.Errorf("last event = %s, want run.preparation_failed_rejected", last.Name)
 	}
 }
+
+func TestRecordLogsWriteFailedLeavesStatusAlone(t *testing.T) {
+	r := NewRun("run_1", "sb_1", "echo hi")
+	if err := r.MarkPreparing(); err != nil {
+		t.Fatalf("MarkPreparing: %v", err)
+	}
+	if err := r.MarkRunning(); err != nil {
+		t.Fatalf("MarkRunning: %v", err)
+	}
+	if err := r.MarkSucceeded(RunOutcome{}); err != nil {
+		t.Fatalf("MarkSucceeded: %v", err)
+	}
+
+	r.RecordLogsWriteFailed("no space left on device")
+
+	// The command succeeded; only retention failed.
+	if r.Status != RunSucceeded {
+		t.Errorf("status = %s, want %s", r.Status, RunSucceeded)
+	}
+
+	events := r.DrainEvents()
+	last := events[len(events)-1]
+	if last.Name != "run.logs_write_failed" {
+		t.Errorf("last event = %s, want run.logs_write_failed", last.Name)
+	}
+	payload, ok := last.Payload.(RunLogsWriteFailed)
+	if !ok {
+		t.Fatalf("payload type = %T, want RunLogsWriteFailed", last.Payload)
+	}
+	if payload.Reason != "no space left on device" {
+		t.Errorf("reason = %q, want the write error", payload.Reason)
+	}
+}

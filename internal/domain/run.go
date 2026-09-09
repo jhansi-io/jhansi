@@ -59,6 +59,13 @@ type RunPreparationFailed struct {
 	Reason string
 }
 
+// RunLogsWriteFailed is the payload on run.logs_write_failed. Reason is the
+// error text. It records that jhansi could not retain the run's output — not
+// that the command failed, which is a separate outcome (ADR-024).
+type RunLogsWriteFailed struct {
+	Reason string
+}
+
 type Run struct {
 	ID        string
 	SandboxID string
@@ -112,6 +119,13 @@ func (r *Run) MarkPreparationFailed(reason string) error {
 	r.Status = RunFailed
 	r.recordWith("run.preparation_failed", time.Now().UTC(), RunPreparationFailed{Reason: reason})
 	return nil
+}
+
+// RecordLogsWriteFailed records that the run's output could not be written to
+// disk. It changes no state: the command's own outcome stands, and what failed
+// is jhansi's retention of what it produced (ADR-024).
+func (r *Run) RecordLogsWriteFailed(reason string) {
+	r.recordWith("run.logs_write_failed", time.Now().UTC(), RunLogsWriteFailed{Reason: reason})
 }
 
 // MarkRunning moves the run to Running. Legal only from PREPARING.

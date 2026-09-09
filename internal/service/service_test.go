@@ -214,21 +214,21 @@ func TestExecHappyPath(t *testing.T) {
 		t.Fatalf("create sandbox: %v", err)
 	}
 
-	run, result, err := svc.Exec(context.Background(), ExecInput{
+	out, err := svc.Exec(context.Background(), ExecInput{
 		SandboxID: sb.ID,
 		Command:   "echo hi",
 	})
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
-	if run.Status != domain.RunSucceeded {
-		t.Errorf("run status = %q, want %q", run.Status, domain.RunSucceeded)
+	if out.Run.Status != domain.RunSucceeded {
+		t.Errorf("run status = %q, want %q", out.Run.Status, domain.RunSucceeded)
 	}
-	if result.ExitCode != 0 {
-		t.Errorf("exit code = %d, want 0", result.ExitCode)
+	if out.Result.ExitCode != 0 {
+		t.Errorf("exit code = %d, want 0", out.Result.ExitCode)
 	}
-	if result.Stdout != "echo hi" {
-		t.Errorf("stdout = %q, want the command echoed", result.Stdout)
+	if out.Result.Stdout != "echo hi" {
+		t.Errorf("stdout = %q, want the command echoed", out.Result.Stdout)
 	}
 	if sb.Status != domain.SandboxReady {
 		t.Errorf("sandbox status = %q, want %q — released after the run", sb.Status, domain.SandboxReady)
@@ -268,18 +268,18 @@ func TestExecNonZeroExit(t *testing.T) {
 		t.Fatalf("create sandbox: %v", err)
 	}
 
-	run, result, err := svc.Exec(context.Background(), ExecInput{
+	out, err := svc.Exec(context.Background(), ExecInput{
 		SandboxID: sb.ID,
 		Command:   "false",
 	})
 	if err != nil {
 		t.Fatalf("exec: %v — a non-zero exit is a completed run, not an error", err)
 	}
-	if run.Status != domain.RunFailed {
-		t.Errorf("run status = %q, want %q", run.Status, domain.RunFailed)
+	if out.Run.Status != domain.RunFailed {
+		t.Errorf("run status = %q, want %q", out.Run.Status, domain.RunFailed)
 	}
-	if result.ExitCode != 1 {
-		t.Errorf("exit code = %d, want 1", result.ExitCode)
+	if out.Result.ExitCode != 1 {
+		t.Errorf("exit code = %d, want 1", out.Result.ExitCode)
 	}
 	if sb.Status != domain.SandboxReady {
 		t.Errorf("sandbox status = %q, want %q — released after a failed run", sb.Status, domain.SandboxReady)
@@ -318,15 +318,15 @@ func TestExecTimedOut(t *testing.T) {
 		t.Fatalf("create sandbox: %v", err)
 	}
 
-	run, _, err := svc.Exec(context.Background(), ExecInput{
+	out, err := svc.Exec(context.Background(), ExecInput{
 		SandboxID: sb.ID,
 		Command:   "sleep 999",
 	})
 	if err != nil {
 		t.Fatalf("exec: %v — a timeout is a completed run, not an error", err)
 	}
-	if run.Status != domain.RunTimedOut {
-		t.Errorf("run status = %q, want %q", run.Status, domain.RunTimedOut)
+	if out.Run.Status != domain.RunTimedOut {
+		t.Errorf("run status = %q, want %q", out.Run.Status, domain.RunTimedOut)
 	}
 	if sb.Status != domain.SandboxReady {
 		t.Errorf("sandbox status = %q, want %q — released after a timeout", sb.Status, domain.SandboxReady)
@@ -365,7 +365,7 @@ func TestExecInfraError(t *testing.T) {
 		t.Fatalf("create sandbox: %v", err)
 	}
 
-	run, _, err := svc.Exec(context.Background(), ExecInput{
+	out, err := svc.Exec(context.Background(), ExecInput{
 		SandboxID: sb.ID,
 		Command:   "anything",
 	})
@@ -373,8 +373,8 @@ func TestExecInfraError(t *testing.T) {
 	if !errors.Is(err, infraErr) {
 		t.Fatalf("exec err = %v, want the infra error surfaced (→ 500)", err)
 	}
-	if run.Status != domain.RunFailed {
-		t.Errorf("run status = %q, want %q", run.Status, domain.RunFailed)
+	if out.Run.Status != domain.RunFailed {
+		t.Errorf("run status = %q, want %q", out.Run.Status, domain.RunFailed)
 	}
 	if sb.Status != domain.SandboxError {
 		t.Errorf("sandbox status = %q, want %q — the runtime under it is broken", sb.Status, domain.SandboxError)
@@ -412,7 +412,7 @@ func TestExecBusySandbox(t *testing.T) {
 	if err := sb.MarkActive(); err != nil {
 		t.Fatalf("setup MarkActive: %v", err)
 	}
-	run, _, err := svc.Exec(context.Background(), ExecInput{
+	out, err := svc.Exec(context.Background(), ExecInput{
 		SandboxID: sb.ID,
 		Command:   "anything",
 	})
@@ -424,8 +424,8 @@ func TestExecBusySandbox(t *testing.T) {
 	if err == nil {
 		t.Fatalf("exec on a busy sandbox: err = nil, want a rejection")
 	}
-	if run != nil {
-		t.Errorf("run = %v, want nil — nothing is minted past a failed claim", run)
+	if out.Run != nil {
+		t.Errorf("run = %v, want nil — nothing is minted past a failed claim", out.Run)
 	}
 	// The rejection is recorded — Option A evidence hygiene. The status it
 	// maps to (409) is ADR-018 and is deliberately not asserted here.
@@ -640,7 +640,7 @@ func TestExecRecordsOutcomePayload(t *testing.T) {
 			}
 			sink.events = nil // clear creation events
 
-			if _, _, err := svc.Exec(context.Background(), ExecInput{
+			if _, err := svc.Exec(context.Background(), ExecInput{
 				SandboxID: sb.ID,
 				Command:   "echo hi",
 			}); err != nil && !errors.Is(err, infraErr) {
@@ -703,15 +703,15 @@ func TestExecRefusesWhenRunDirCannotBeCreated(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	run, _, err := svc.Exec(context.Background(), ExecInput{
+	out, err := svc.Exec(context.Background(), ExecInput{
 		SandboxID: sb.ID,
 		Command:   "echo hi",
 	})
 	if err == nil {
 		t.Fatal("Exec: want error, got nil")
 	}
-	if run.Status != domain.RunFailed {
-		t.Errorf("run status = %s, want %s", run.Status, domain.RunFailed)
+	if out.Run.Status != domain.RunFailed {
+		t.Errorf("run status = %s, want %s", out.Run.Status, domain.RunFailed)
 	}
 	if sb.Status != domain.SandboxReady {
 		t.Errorf("sandbox status = %s, want %s", sb.Status, domain.SandboxReady)
@@ -723,4 +723,70 @@ func TestExecRefusesWhenRunDirCannotBeCreated(t *testing.T) {
 			t.Error("run.running recorded on a refused run")
 		}
 	}
+}
+
+func TestExecWritesRunLogs(t *testing.T) {
+	dataDir := t.TempDir()
+	sink := &fakeSink{}
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        dataDir,
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("CreateSandbox: %v", err)
+	}
+
+	out, err := svc.Exec(context.Background(), ExecInput{
+		SandboxID: sb.ID,
+		Command:   "echo hi",
+	})
+	if err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	if out.LogsError != nil {
+		t.Fatalf("LogsError = %v, want nil", out.LogsError)
+	}
+
+	dir := runDirFor(dataDir, out.Run.ID)
+	stdout, err := os.ReadFile(filepath.Join(dir, "stdout"))
+	if err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	// The file holds the bytes the payload hashed — one claim in two places.
+	if string(stdout) != out.Result.Stdout {
+		t.Errorf("stdout file = %q, want %q", stdout, out.Result.Stdout)
+	}
+	if _, err := os.ReadFile(filepath.Join(dir, "stderr")); err != nil {
+		t.Fatalf("read stderr: %v", err)
+	}
+}
+
+func TestExecRecordsLogsWriteFailure(t *testing.T) {
+	dataDir := t.TempDir()
+	sink := &fakeSink{}
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        dataDir,
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("CreateSandbox: %v", err)
+	}
+
+	out, err := svc.Exec(context.Background(), ExecInput{
+		SandboxID: sb.ID,
+		Command:   "echo hi",
+	})
+	if err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	if out.LogsError != nil {
+		t.Fatalf("LogsError = %v, want nil", out.LogsError)
+	}
+	_ = out
 }
