@@ -38,7 +38,7 @@ answers a question nobody asks of an execution record.
 
 ### 2. `run.succeeded` and `run.failed` share one outcome payload; `run.timed_out` embeds it
 
-    RunOutcome:  ExitCode, DurationMS, StdoutBytes, StderrBytes,
+    RunOutcome:  ExitCode (*int), DurationMS, StdoutBytes, StderrBytes,
                  StdoutSHA256, StderrSHA256, OutputTruncated
     RunTimedOutOutcome: RunOutcome (embedded), TimeoutMS
 
@@ -62,6 +62,15 @@ rather than a nested one.
 A single struct with an optional timeout field was rejected. On two of the
 three events that field would be a zero value carrying no meaning, and a
 reader could not distinguish "no timeout applied" from "a timeout of zero".
+
+`ExitCode` is a pointer, nil when no exit was observed. Two paths reach a
+terminal event without one: an infra fault, where the engine never ran the
+command, and a timeout, where the container was killed rather than seen
+exiting — `waitContainer` returns an error on the deadline, so `ExecResult`
+carries its zero value. Recording `0` on either would put a clean exit in the
+spine for a run that never had one. That is the precise failure this ADR
+exists to prevent, and a sentinel such as `-1` only moves the problem to a
+reader who does not know the convention.
 
 ### 3. Hashes and byte counts are computed in the service, over retained output
 
@@ -110,6 +119,12 @@ primitives-only contract and gains no new field.
 
 `NewRun`, `MarkSucceeded`, `MarkFailed` and `MarkTimedOut` change signature.
 `service.Exec` and the domain tests are the call sites.
+
+`Run` gains a `Command` field. The constructor takes the command in order to
+record it, and a parameter consumed once and discarded reads as an oversight;
+an aggregate that cannot state its own command also blocks anything that later
+wants to expose it. The field is not on the API response — that is a separate
+choice.
 
 `MarkPreparing`, `MarkRunning` and `MarkCancelled` keep nil payloads — no
 content distinguishes those moments beyond the fact that they occurred.
