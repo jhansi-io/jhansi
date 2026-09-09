@@ -32,3 +32,11 @@
 {"Name":"run.preparing","At":"2026-08-14T22:18:18.482933Z","AggregateID":"run_1052c78eb036a08d6391db655951ec64","Payload":null}
 {"Name":"run.running","At":"2026-08-14T22:18:18.482934Z","AggregateID":"run_1052c78eb036a08d6391db655951ec64","Payload":null}
 {"Name":"run.succeeded","At":"2026-08-14T22:18:18.714284Z","AggregateID":"run_1052c78eb036a08d6391db655951ec64","Payload":null}
+{"Name":"sandbox.created","At":"2026-09-08T17:12:40.239622Z","AggregateID":"sb_67d6d68f01befcad057ada46d379619d","Payload":null}
+{"Name":"sandbox.ready","At":"2026-09-08T17:12:40.239823Z","AggregateID":"sb_67d6d68f01befcad057ada46d379619d","Payload":null}
+{"Name":"sandbox.active","At":"2026-09-08T17:13:00.375231Z","AggregateID":"sb_67d6d68f01befcad057ada46d379619d","Payload":null}
+{"Name":"sandbox.idle","At":"2026-09-08T17:13:02.722239Z","AggregateID":"sb_67d6d68f01befcad057ada46d379619d","Payload":null}
+{"Name":"run.created","At":"2026-09-08T17:13:00.375232Z","AggregateID":"run_29d1edc891b55efaa62ce35364fafcd1","Payload":null}
+{"Name":"run.preparing","At":"2026-09-08T17:13:00.375233Z","AggregateID":"run_29d1edc891b55efaa62ce35364fafcd1","Payload":null}
+{"Name":"run.running","At":"2026-09-08T17:13:00.375234Z","AggregateID":"run_29d1edc891b55efaa62ce35364fafcd1","Payload":null}
+{"Name":"run.timed_out","At":"2026-09-08T17:13:02.72224Z","AggregateID":"run_29d1edc891b55efaa62ce35364fafcd1","Payload":null}

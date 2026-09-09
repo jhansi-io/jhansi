@@ -566,3 +566,119 @@ func TestCreateSandboxWorkDirFails(t *testing.T) {
 		t.Errorf("recorded %d events, want 0", len(sink.events))
 	}
 }
+
+// findEvent returns the payload of the first event with the given name.
+func findEvent(t *testing.T, events []domain.Event, name string) any {
+	t.Helper()
+	for _, e := range events {
+		if e.Name == name {
+			return e.Payload
+		}
+	}
+	t.Fatalf("no %s event in %v", name, events)
+	return nil
+}
+
+// The exit code recorded must be one the engine actually observed. A killed
+// or never-started container has none, and zero would read as a clean exit
+// (ADR-023).
+func TestExecRecordsOutcomePayload(t *testing.T) {
+	infraErr := errors.New("daemon unreachable")
+
+	cases := []struct {
+		name      string
+		exec      func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error)
+		wantEvent string
+		wantExit  *int
+	}{
+		{
+			name:      "success",
+			exec:      func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
+				return isolation.ExecResult{ExitCode: 0, Stdout: "hi"}, nil
+			},
+			wantEvent: "run.succeeded",
+			wantExit:  ptr(0),
+		},
+		{
+			name:      "non-zero exit",
+			exec:      func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
+				return isolation.ExecResult{ExitCode: 2, Stderr: "boom"}, nil
+			},
+			wantEvent: "run.failed",
+			wantExit:  ptr(2),
+		},
+		{
+			name:      "timeout",
+			exec:      func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
+				return isolation.ExecResult{TimedOut: true}, nil
+			},
+			wantEvent: "run.timed_out",
+			wantExit:  nil,
+		},
+		{
+			name:      "infra fault",
+			exec:      func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
+				return isolation.ExecResult{}, infraErr
+			},
+			wantEvent: "run.failed",
+			wantExit:  nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sink := &fakeSink{}
+			svc := New(registry.New(), sink, &isolation.StubEngine{ExecFunc: tc.exec}, Config{
+				DataDir:        t.TempDir(),
+				ExecTimeout:    30 * time.Second,
+				MaxOutputBytes: 1 << 20,
+			})
+
+			sb, err := svc.CreateSandbox()
+			if err != nil {
+				t.Fatalf("CreateSandbox: %v", err)
+			}
+			sink.events = nil // clear creation events
+
+			if _, _, err := svc.Exec(context.Background(), ExecInput{
+				SandboxID: sb.ID,
+				Command:   "echo hi",
+			}); err != nil && !errors.Is(err, infraErr) {
+				t.Fatalf("Exec: %v", err)
+			}
+
+			cmd, ok := findEvent(t, sink.events, "run.created").(domain.RunCommand)
+			if !ok || cmd.Command != "echo hi" {
+				t.Errorf("run.created payload = %+v, want command %q", cmd, "echo hi")
+			}
+
+			payload := findEvent(t, sink.events, tc.wantEvent)
+			outcome, ok := payload.(domain.RunOutcome)
+			if !ok {
+				timedOut, isTimeout := payload.(domain.RunTimedOutOutcome)
+				if !isTimeout {
+					t.Fatalf("%s payload = %T, want an outcome", tc.wantEvent, payload)
+				}
+				if timedOut.TimeoutMS != (30 * time.Second).Milliseconds() {
+					t.Errorf("TimeoutMS = %d, want 30000", timedOut.TimeoutMS)
+				}
+				outcome = timedOut.RunOutcome
+			}
+
+			switch {
+			case tc.wantExit == nil && outcome.ExitCode != nil:
+				t.Errorf("ExitCode = %d, want nil", *outcome.ExitCode)
+			case tc.wantExit != nil && outcome.ExitCode == nil:
+				t.Errorf("ExitCode = nil, want %d", *tc.wantExit)
+			case tc.wantExit != nil && *outcome.ExitCode != *tc.wantExit:
+				t.Errorf("ExitCode = %d, want %d", *outcome.ExitCode, *tc.wantExit)
+			}
+
+			if outcome.StdoutSHA256 == "" || outcome.StderrSHA256 == "" {
+				t.Errorf("hashes = %q/%q, want both set", outcome.StdoutSHA256, outcome.StderrSHA256)
+			}
+		})
+	}
+}
+
+func ptr(i int) *int { return &i }

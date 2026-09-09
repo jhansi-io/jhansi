@@ -120,35 +120,43 @@ func (s *ExecutionService) Exec(ctx context.Context, in ExecInput) (*domain.Run,
 		}
 		return nil, isolation.ExecResult{}, err
 	}
-	run := domain.NewRun(runID, in.SandboxID)
+	run := domain.NewRun(runID, in.SandboxID, in.Command)
 	if err := run.MarkPreparing(); err != nil {
 		panic(err) // unreachable: a fresh run is QUEUED, MarkPreparing is legal from QUEUED
 	}
 	if err := run.MarkRunning(); err != nil {
 		panic(err) // unreachable: MarkPreparing left it PREPARING, MarkRunning is legal from PREPARING
 	}
+	timeout := s.timeoutFor(in.Timeout)
+
+	started := time.Now()
 	result, err := s.engine.Exec(ctx, isolation.ExecRequest{
 		SandboxID:      in.SandboxID,
 		WorkDir:        workDirFor(s.cfg.DataDir, in.SandboxID),
 		Command:        in.Command,
-		Timeout:        s.timeoutFor(in.Timeout),
+		Timeout:        timeout,
 		MaxOutputBytes: s.cfg.MaxOutputBytes,
 	})
+	elapsed := time.Since(started)
 
 	switch {
 	case err != nil:
 		sb.MarkError()
-		run.MarkFailed()
+		run.MarkFailed(runOutcome(result, elapsed, nil))
 	case result.TimedOut:
 		sb.MarkIdle()
-		run.MarkTimedOut()
+		run.MarkTimedOut(domain.RunTimedOutOutcome{
+			RunOutcome: runOutcome(result, elapsed, nil),
+			TimeoutMS:  timeout.Milliseconds(),
+		})
 	case result.ExitCode != 0:
 		sb.MarkIdle()
-		run.MarkFailed()
+		run.MarkFailed(runOutcome(result, elapsed, &result.ExitCode))
 	default:
 		sb.MarkIdle()
-		run.MarkSucceeded()
+		run.MarkSucceeded(runOutcome(result, elapsed, &result.ExitCode))
 	}
+
 	if drainErr := s.drainAndRecord(sb); drainErr != nil {
 		return run, result, drainErr
 	}

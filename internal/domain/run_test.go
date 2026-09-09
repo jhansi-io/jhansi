@@ -3,7 +3,7 @@ package domain
 import "testing"
 
 func TestNewRun(t *testing.T) {
-	r := NewRun("run_1", "sb_1")
+	r := NewRun("run_1", "sb_1", "echo hi")
 	if got := r.DrainEvents(); len(got) != 1 || got[0].Name != "run.created" {
 		t.Fatalf("expected run.created, got %v", got)
 	}
@@ -18,7 +18,7 @@ func TestNewRun(t *testing.T) {
 }
 
 func TestRunHappyChain(t *testing.T) {
-	r := NewRun("run_1", "sb_1")
+	r := NewRun("run_1", "sb_1", "echo hi")
 
 	if err := r.MarkPreparing(); err != nil {
 		t.Fatalf("MarkPreparing: %v", err)
@@ -42,7 +42,7 @@ func TestRunHappyChain(t *testing.T) {
 
 func TestMarkSucceeded(t *testing.T) {
 	// happy: RUNNING → SUCCEEDED
-	r := NewRun("run_1", "sb_1")
+	r := NewRun("run_1", "sb_1", "echo hi")
 	if err := r.MarkPreparing(); err != nil {
 		t.Fatalf("setup MarkPreparing: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestMarkSucceeded(t *testing.T) {
 	}
 	r.DrainEvents() // clear setup events
 
-	if err := r.MarkSucceeded(); err != nil {
+	if err := r.MarkSucceeded(RunOutcome{}); err != nil {
 		t.Fatalf("MarkSucceeded: unexpected error %v", err)
 	}
 	if r.Status != RunSucceeded {
@@ -64,9 +64,9 @@ func TestMarkSucceeded(t *testing.T) {
 	}
 
 	// reject: from QUEUED, emits nothing
-	q := NewRun("run_2", "sb_1")
+	q := NewRun("run_2", "sb_1", "echo hi")
 	q.DrainEvents() // clear run.created
-	if err := q.MarkSucceeded(); err == nil {
+	if err := q.MarkSucceeded(RunOutcome{}); err == nil {
 		t.Errorf("MarkSucceeded from QUEUED: want error, got nil")
 	}
 	if got := q.DrainEvents(); len(got) != 1 || got[0].Name != "run.succeeded_rejected" {
@@ -76,7 +76,7 @@ func TestMarkSucceeded(t *testing.T) {
 
 func TestMarkFailed(t *testing.T) {
 	// RUNNING → FAILED
-	r := NewRun("run_1", "sb_1")
+	r := NewRun("run_1", "sb_1", "echo hi")
 	if err := r.MarkPreparing(); err != nil {
 		t.Fatalf("setup MarkPreparing: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestMarkFailed(t *testing.T) {
 		t.Fatalf("setup MarkRunning: %v", err)
 	}
 	r.DrainEvents() // clear setup events
-	if err := r.MarkFailed(); err != nil {
+	if err := r.MarkFailed(RunOutcome{}); err != nil {
 		t.Fatalf("MarkFailed: unexpected error %v", err)
 	}
 	if r.Status != RunFailed {
@@ -95,9 +95,9 @@ func TestMarkFailed(t *testing.T) {
 		t.Errorf("events = %v, want one run.failed", got)
 	}
 	// reject: from QUEUED, emits nothing
-	q := NewRun("run_2", "sb_1")
+	q := NewRun("run_2", "sb_1", "echo hi")
 	q.DrainEvents() // clear run.created
-	if err := q.MarkFailed(); err == nil {
+	if err := q.MarkFailed(RunOutcome{}); err == nil {
 		t.Errorf("MarkFailed from QUEUED: want error, got nil")
 	}
 	if got := q.DrainEvents(); len(got) != 1 || got[0].Name != "run.failed_rejected" {
@@ -107,7 +107,7 @@ func TestMarkFailed(t *testing.T) {
 
 func TestMarkTimedOut(t *testing.T) {
 	// RUNNING → TIMED_OUT
-	r := NewRun("run_1", "sb_1")
+	r := NewRun("run_1", "sb_1", "echo hi")
 	if err := r.MarkPreparing(); err != nil {
 		t.Fatalf("setup MarkPreparing: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestMarkTimedOut(t *testing.T) {
 	}
 	r.DrainEvents() //clear setup events
 
-	if err := r.MarkTimedOut(); err != nil {
+	if err := r.MarkTimedOut(RunTimedOutOutcome{}); err != nil {
 		t.Fatalf("MarkTimedOut: unexpected error: %v", err)
 	}
 
@@ -129,9 +129,9 @@ func TestMarkTimedOut(t *testing.T) {
 	}
 
 	// reject: from QUEUED, emits nothing
-	q := NewRun("run_2", "sb_1")
+	q := NewRun("run_2", "sb_1", "echo hi")
 	q.DrainEvents() // clear run.created
-	if err := q.MarkTimedOut(); err == nil {
+	if err := q.MarkTimedOut(RunTimedOutOutcome{}); err == nil {
 		t.Errorf("MarkTimedOut from QUEUED: want error, got nil")
 	}
 	if got := q.DrainEvents(); len(got) != 1 || got[0].Name != "run.timed_out_rejected" {
@@ -152,7 +152,7 @@ func TestMarkCancelled(t *testing.T) {
 
 	for _, tt := range froms {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewRun("run_1", "sb_1")
+			r := NewRun("run_1", "sb_1", "echo hi")
 			tt.to(r)
 			r.DrainEvents() // clear setup events
 
@@ -169,10 +169,10 @@ func TestMarkCancelled(t *testing.T) {
 		})
 	}
 	// reject: from a terminal state, emits nothing
-	q := NewRun("run_2", "sb_1")
+	q := NewRun("run_2", "sb_1", "echo hi")
 	q.MarkPreparing()
 	q.MarkRunning()
-	q.MarkSucceeded()
+	q.MarkSucceeded(RunOutcome{})
 	q.DrainEvents()
 	if err := q.MarkCancelled(); err == nil {
 		t.Errorf("MarkCancelled from SUCCEEDED: want error, got nil")
@@ -183,7 +183,7 @@ func TestMarkCancelled(t *testing.T) {
 }
 
 func TestRunRejectionPayload(t *testing.T) {
-	r := NewRun("run_1", "sb_1")
+	r := NewRun("run_1", "sb_1", "echo hi")
 	if err := r.MarkPreparing(); err != nil {
 		t.Fatalf("setup MarkPreparing: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestRunRejectionPayload(t *testing.T) {
 }
 
 func TestMarkRunningRejected(t *testing.T) {
-	r := NewRun("run_1", "sb_1")
+	r := NewRun("run_1", "sb_1", "echo hi")
 	r.DrainEvents() // clear run.created
 
 	if err := r.MarkRunning(); err == nil {
@@ -217,5 +217,79 @@ func TestMarkRunningRejected(t *testing.T) {
 	}
 	if got := r.DrainEvents(); len(got) != 1 || got[0].Name != "run.running_rejected" {
 		t.Errorf("events = %v, want one run.running_rejected", got)
+	}
+}
+
+func TestRunCreatedCarriesCommand(t *testing.T) {
+	r := NewRun("run_1", "sb_1", "python train.py")
+
+	events := r.DrainEvents()
+	if len(events) != 1 || events[0].Name != "run.created" {
+		t.Fatalf("events = %v, want one run.created", events)
+	}
+	got, ok := events[0].Payload.(RunCommand)
+	if !ok {
+		t.Fatalf("payload = %T, want RunCommand", events[0].Payload)
+	}
+	if got.Command != "python train.py" {
+		t.Errorf("Command = %q, want %q", got.Command, "python train.py")
+	}
+}
+
+func TestTerminalEventCarriesOutcome(t *testing.T) {
+	r := NewRun("run_1", "sb_1", "echo hi")
+	r.MarkPreparing()
+	r.MarkRunning()
+	r.DrainEvents() // clear setup events
+
+	exit := 0
+	want := RunOutcome{
+		ExitCode:        &exit,
+		DurationMS:      1200,
+		StdoutBytes:     3,
+		StderrBytes:     0,
+		StdoutSHA256:    "abc",
+		StderrSHA256:    "def",
+		OutputTruncated: true,
+	}
+	if err := r.MarkSucceeded(want); err != nil {
+		t.Fatalf("MarkSucceeded: %v", err)
+	}
+
+	events := r.DrainEvents()
+	got, ok := events[0].Payload.(RunOutcome)
+	if !ok {
+		t.Fatalf("payload = %T, want RunOutcome", events[0].Payload)
+	}
+	if got != want {
+		t.Errorf("payload = %+v, want %+v", got, want)
+	}
+}
+
+// A timed-out run has no exit code: the container was killed rather than
+// observed exiting, so nil is the only truthful value (ADR-023).
+func TestTimedOutEventCarriesTimeoutAndNoExitCode(t *testing.T) {
+	r := NewRun("run_1", "sb_1", "sleep 999")
+	r.MarkPreparing()
+	r.MarkRunning()
+	r.DrainEvents() // clear setup events
+
+	if err := r.MarkTimedOut(RunTimedOutOutcome{
+		RunOutcome: RunOutcome{DurationMS: 5000},
+		TimeoutMS:  5000,
+	}); err != nil {
+		t.Fatalf("MarkTimedOut: %v", err)
+	}
+
+	events := r.DrainEvents()
+	got, ok := events[0].Payload.(RunTimedOutOutcome)
+	if !ok {
+		t.Fatalf("payload = %T, want RunTimedOutOutcome", events[0].Payload)
+	}
+	if got.TimeoutMS != 5000 {
+		t.Errorf("TimeoutMS = %d, want 5000", got.TimeoutMS)
+	}
+	if got.ExitCode != nil {
+		t.Errorf("ExitCode = %d, want nil", *got.ExitCode)
 	}
 }

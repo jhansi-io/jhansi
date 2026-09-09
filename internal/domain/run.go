@@ -23,23 +23,56 @@ type RunTransitionRejected struct {
 	To   RunStatus
 }
 
+// RunCommand is the payload on run.created. It records the command as the
+// caller sent it, not the shell invocation the engine builds around it.
+type RunCommand struct {
+	Command string
+}
+
+// RunOutcome is the payload on run.succeeded and run.failed. It describes how
+// a command ended. The hashes and byte counts commit to the output jhansi
+// retained, which OutputTruncated reports may be less than the command wrote.
+type RunOutcome struct {
+	// ExitCode is nil when the engine could not run the command at all and
+	// no exit was observed. Zero would read as a clean exit (ADR-023).
+	ExitCode        *int
+	DurationMS      int64
+	StdoutBytes     int
+	StderrBytes     int
+	StdoutSHA256    string
+	StderrSHA256    string
+	OutputTruncated bool
+}
+
+// RunTimedOutOutcome is the payload on run.timed_out: the same outcome fields
+// plus the timeout that was applied. Embedded rather than repeated, so it
+// flattens to one object under encoding/json.
+type RunTimedOutOutcome struct {
+	RunOutcome
+	TimeoutMS int64
+}
+
 type Run struct {
 	ID        string
 	SandboxID string
+	Command   string
 	Status    RunStatus
 	CreatedAt time.Time
 	eventBuffer
 }
 
-func NewRun(id, sandboxID string) *Run {
+// NewRun creates a run in QUEUED and records run.created carrying the command
+// as the caller sent it (ADR-023).
+func NewRun(id, sandboxID, command string) *Run {
 	r := &Run{
 		ID:          id,
 		SandboxID:   sandboxID,
+		Command:     command,
 		Status:      RunQueued,
 		CreatedAt:   time.Now().UTC(),
 		eventBuffer: eventBuffer{aggregateID: id},
 	}
-	r.record("run.created", r.CreatedAt)
+	r.recordWith("run.created", r.CreatedAt, RunCommand{Command: command})
 	return r
 }
 
@@ -71,8 +104,9 @@ func (r *Run) MarkRunning() error {
 	return nil
 }
 
-// MarkSucceeded moves the run to Succeeded. Legal only from RUNNING.
-func (r *Run) MarkSucceeded() error {
+// MarkSucceeded moves the run to SUCCEEDED and records the outcome (ADR-023).
+// Legal only from RUNNING.
+func (r *Run) MarkSucceeded(outcome RunOutcome) error {
 	if r.Status != RunRunning {
 		r.recordWith("run.succeeded_rejected", time.Now().UTC(), RunTransitionRejected{
 			From: r.Status,
@@ -81,12 +115,13 @@ func (r *Run) MarkSucceeded() error {
 		return fmt.Errorf("run %s: cannot mark succeeded from %s", r.ID, r.Status)
 	}
 	r.Status = RunSucceeded
-	r.record("run.succeeded", time.Now().UTC())
+	r.recordWith("run.succeeded", time.Now().UTC(), outcome)
 	return nil
 }
 
-// MarkFailed moves the run to FAILED. Legal only from RUNNING.
-func (r *Run) MarkFailed() error {
+// MarkFailed moves the run to FAILED and records the outcome (ADR-023).
+// Legal only from RUNNING.
+func (r *Run) MarkFailed(outcome RunOutcome) error {
 	if r.Status != RunRunning {
 		r.recordWith("run.failed_rejected", time.Now().UTC(), RunTransitionRejected{
 			From: r.Status,
@@ -95,12 +130,13 @@ func (r *Run) MarkFailed() error {
 		return fmt.Errorf("run %s: cannot mark failed from %s", r.ID, r.Status)
 	}
 	r.Status = RunFailed
-	r.record("run.failed", time.Now().UTC())
+	r.recordWith("run.failed", time.Now().UTC(), outcome)
 	return nil
 }
 
-// MarkTimedOut moves the run to TIMED_OUT. Legal only from RUNNING.
-func (r *Run) MarkTimedOut() error {
+// MarkTimedOut moves the run to TIMED_OUT and records the outcome together
+// with the timeout that was applied (ADR-023). Legal only from RUNNING.
+func (r *Run) MarkTimedOut(outcome RunTimedOutOutcome) error {
 	if r.Status != RunRunning {
 		r.recordWith("run.timed_out_rejected", time.Now().UTC(), RunTransitionRejected{
 			From: r.Status,
@@ -109,7 +145,7 @@ func (r *Run) MarkTimedOut() error {
 		return fmt.Errorf("run %s: cannot mark timed_out from %s", r.ID, r.Status)
 	}
 	r.Status = RunTimedOut
-	r.record("run.timed_out", time.Now().UTC())
+	r.recordWith("run.timed_out", time.Now().UTC(), outcome)
 	return nil
 }
 

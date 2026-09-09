@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Run events in `events.jsonl` now carry the execution itself, not just its timeline. `run.created` records the command as submitted; `run.succeeded`, `run.failed` and `run.timed_out` record the exit code, duration, retained output sizes and SHA-256 hashes, and whether output was truncated. `run.timed_out` also records the timeout applied.
+- Output hashes commit to the bytes jhansi retained, which `output_truncated` reports may be fewer than the command wrote.
+- A run that was killed on timeout or never started records no exit code, rather than zero.
+
 ## [0.2.0] - 2026-09-08
 
 ### Added
