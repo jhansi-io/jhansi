@@ -124,6 +124,21 @@ func (s *ExecutionService) Exec(ctx context.Context, in ExecInput) (*domain.Run,
 	if err := run.MarkPreparing(); err != nil {
 		panic(err) // unreachable: a fresh run is QUEUED, MarkPreparing is legal from QUEUED
 	}
+	// Preflight: creating the run's log directory is the check that the host
+	// can retain this run's output. Failing here costs nothing — no code has
+	// executed — so jhansi refuses rather than run unrecorded (ADR-025).
+	if err := os.MkdirAll(runDirFor(s.cfg.DataDir, runID), 0o700); err != nil {
+		sb.MarkIdle()
+		run.MarkPreparationFailed(err.Error())
+		if drainErr := s.drainAndRecord(sb); drainErr != nil {
+			return run, isolation.ExecResult{}, drainErr
+		}
+		if drainErr := s.drainAndRecord(run); drainErr != nil {
+			return run, isolation.ExecResult{}, drainErr
+		}
+		return run, isolation.ExecResult{}, err
+	}
+
 	if err := run.MarkRunning(); err != nil {
 		panic(err) // unreachable: MarkPreparing left it PREPARING, MarkRunning is legal from PREPARING
 	}

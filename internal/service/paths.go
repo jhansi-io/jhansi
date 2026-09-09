@@ -8,3 +8,10 @@ import "path/filepath"
 func workDirFor(dataDir, sandboxID string) string {
 	return filepath.Join(dataDir, "sandboxes", sandboxID)
 }
+
+// runDirFor returns the filesystem path of a run's log directory. It sits at
+// the data-dir root rather than under sandboxes/, because evidence outlives
+// the sandbox that produced it (ADR-024).
+func runDirFor(dataDir, runID string) string {
+	return filepath.Join(dataDir, "runs", runID)
+}

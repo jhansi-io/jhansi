@@ -682,3 +682,45 @@ func TestExecRecordsOutcomePayload(t *testing.T) {
 }
 
 func ptr(i int) *int { return &i }
+
+func TestExecRefusesWhenRunDirCannotBeCreated(t *testing.T) {
+	dataDir := t.TempDir()
+	sink := &fakeSink{}
+	svc := New(registry.New(), sink, &isolation.StubEngine{}, Config{
+		DataDir:        dataDir,
+		ExecTimeout:    30 * time.Second,
+		MaxOutputBytes: 1 << 20,
+	})
+
+	sb, err := svc.CreateSandbox()
+	if err != nil {
+		t.Fatalf("CreateSandbox: %v", err)
+	}
+
+	// A regular file where runs/ must be a directory: MkdirAll fails the same
+	// way a read-only mount or a full disk would.
+	if err := os.WriteFile(filepath.Join(dataDir, "runs"), nil, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	run, _, err := svc.Exec(context.Background(), ExecInput{
+		SandboxID: sb.ID,
+		Command:   "echo hi",
+	})
+	if err == nil {
+		t.Fatal("Exec: want error, got nil")
+	}
+	if run.Status != domain.RunFailed {
+		t.Errorf("run status = %s, want %s", run.Status, domain.RunFailed)
+	}
+	if sb.Status != domain.SandboxReady {
+		t.Errorf("sandbox status = %s, want %s", sb.Status, domain.SandboxReady)
+	}
+
+	findEvent(t, sink.events, "run.preparation_failed")
+	for _, e := range sink.events {
+		if e.Name == "run.running" {
+			t.Error("run.running recorded on a refused run")
+		}
+	}
+}
