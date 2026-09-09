@@ -52,6 +52,13 @@ type RunTimedOutOutcome struct {
 	TimeoutMS int64
 }
 
+// RunPreparationFailed is the payload on run.preparation_failed. It states why
+// the run could not be prepared. A run carrying this event never entered
+// RUNNING, so no code executed (ADR-025).
+type RunPreparationFailed struct {
+	Reason string
+}
+
 type Run struct {
 	ID        string
 	SandboxID string
@@ -87,6 +94,23 @@ func (r *Run) MarkPreparing() error {
 	}
 	r.Status = RunPreparing
 	r.record("run.preparing", time.Now().UTC())
+	return nil
+}
+
+// MarkPreparationFailed moves the run to FAILED without it ever entering
+// RUNNING, recording why preparation could not complete (ADR-025). Legal only
+// from PREPARING: a run that reached FAILED with no run.running event in the
+// spine never executed code.
+func (r *Run) MarkPreparationFailed(reason string) error {
+	if r.Status != RunPreparing {
+		r.recordWith("run.preparation_failed_rejected", time.Now().UTC(), RunTransitionRejected{
+			From: r.Status,
+			To:   RunFailed,
+		})
+		return fmt.Errorf("run %s: cannot mark preparation failed from %s", r.ID, r.Status)
+	}
+	r.Status = RunFailed
+	r.recordWith("run.preparation_failed", time.Now().UTC(), RunPreparationFailed{Reason: reason})
 	return nil
 }
 

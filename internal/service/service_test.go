@@ -592,32 +592,32 @@ func TestExecRecordsOutcomePayload(t *testing.T) {
 		wantExit  *int
 	}{
 		{
-			name:      "success",
-			exec:      func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
+			name: "success",
+			exec: func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
 				return isolation.ExecResult{ExitCode: 0, Stdout: "hi"}, nil
 			},
 			wantEvent: "run.succeeded",
 			wantExit:  ptr(0),
 		},
 		{
-			name:      "non-zero exit",
-			exec:      func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
+			name: "non-zero exit",
+			exec: func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
 				return isolation.ExecResult{ExitCode: 2, Stderr: "boom"}, nil
 			},
 			wantEvent: "run.failed",
 			wantExit:  ptr(2),
 		},
 		{
-			name:      "timeout",
-			exec:      func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
+			name: "timeout",
+			exec: func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
 				return isolation.ExecResult{TimedOut: true}, nil
 			},
 			wantEvent: "run.timed_out",
 			wantExit:  nil,
 		},
 		{
-			name:      "infra fault",
-			exec:      func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
+			name: "infra fault",
+			exec: func(context.Context, isolation.ExecRequest) (isolation.ExecResult, error) {
 				return isolation.ExecResult{}, infraErr
 			},
 			wantEvent: "run.failed",

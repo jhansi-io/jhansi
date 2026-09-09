@@ -293,3 +293,58 @@ func TestTimedOutEventCarriesTimeoutAndNoExitCode(t *testing.T) {
 		t.Errorf("ExitCode = %d, want nil", *got.ExitCode)
 	}
 }
+
+func TestMarkPreparationFailedFromPreparing(t *testing.T) {
+	r := NewRun("run_1", "sb_1", "echo hi")
+	if err := r.MarkPreparing(); err != nil {
+		t.Fatalf("MarkPreparing: %v", err)
+	}
+
+	if err := r.MarkPreparationFailed("run dir not writable"); err != nil {
+		t.Fatalf("MarkPreparationFailed: %v", err)
+	}
+	if r.Status != RunFailed {
+		t.Errorf("status = %s, want %s", r.Status, RunFailed)
+	}
+
+	events := r.DrainEvents()
+	last := events[len(events)-1]
+	if last.Name != "run.preparation_failed" {
+		t.Errorf("last event = %s, want run.preparation_failed", last.Name)
+	}
+	payload, ok := last.Payload.(RunPreparationFailed)
+	if !ok {
+		t.Fatalf("payload type = %T, want RunPreparationFailed", last.Payload)
+	}
+	if payload.Reason != "run dir not writable" {
+		t.Errorf("reason = %q, want %q", payload.Reason, "run dir not writable")
+	}
+
+	for _, e := range events {
+		if e.Name == "run.running" {
+			t.Error("run.running recorded on a run that never executed")
+		}
+	}
+}
+
+func TestMarkPreparationFailedFromRunning(t *testing.T) {
+	r := NewRun("run_1", "sb_1", "echo hi")
+	if err := r.MarkPreparing(); err != nil {
+		t.Fatalf("MarkPreparing: %v", err)
+	}
+	if err := r.MarkRunning(); err != nil {
+		t.Fatalf("MarkRunning: %v", err)
+	}
+
+	if err := r.MarkPreparationFailed("too late"); err == nil {
+		t.Fatal("MarkPreparationFailed from RUNNING: want error, got nil")
+	}
+	if r.Status != RunRunning {
+		t.Errorf("status = %s, want %s", r.Status, RunRunning)
+	}
+
+	events := r.DrainEvents()
+	if last := events[len(events)-1]; last.Name != "run.preparation_failed_rejected" {
+		t.Errorf("last event = %s, want run.preparation_failed_rejected", last.Name)
+	}
+}
